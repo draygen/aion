@@ -2,10 +2,13 @@
 venv/
 __pycache__/
 .vscode/
-# caches / models / datasets
+
+# caches / datasets / model outputs
 data/
 hf_cache/
 lora_mistral_output/
+
+# common model + archive/media extensions
 **/*.gguf
 **/*.safetensors
 **/*.pt
@@ -16,7 +19,6 @@ lora_mistral_output/
 **/*.npz
 **/*.parquet
 **/*.sqlite
-# archives/media
 **/*.zip
 **/*.7z
 **/*.tar
