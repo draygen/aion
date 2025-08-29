@@ -2,6 +2,7 @@
 venv/
 __pycache__/
 .vscode/
+# caches / models / datasets
 data/
 hf_cache/
 lora_mistral_output/
@@ -15,6 +16,7 @@ lora_mistral_output/
 **/*.npz
 **/*.parquet
 **/*.sqlite
+# archives/media
 **/*.zip
 **/*.7z
 **/*.tar
