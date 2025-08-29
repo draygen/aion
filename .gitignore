@@ -1,33 +1,7 @@
-﻿# Python
-.venv/
+﻿.venv/
 venv/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.egg-info/
-.eggs/
-.pytest_cache/
-.mypy_cache/
-
-# Env / secrets
-.env
-.env.*
-
-# OS / IDE
-.DS_Store
-Thumbs.db
 .vscode/
-.idea/
-
-# Build output
-build/
-dist/
-# venvs
-.venv/
-venv/
-
-# caches / models / data
 data/
 hf_cache/
 lora_mistral_output/
@@ -41,8 +15,6 @@ lora_mistral_output/
 **/*.npz
 **/*.parquet
 **/*.sqlite
-
-# archives/media
 **/*.zip
 **/*.7z
 **/*.tar
@@ -50,17 +22,3 @@ lora_mistral_output/
 **/*.mp4
 **/*.wav
 **/*.flac
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-.eggs/
-.pytest_cache/
-.mypy_cache/
-
-# IDE/OS
-.vscode/
-.DS_Store
-Thumbs.db
