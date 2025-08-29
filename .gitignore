@@ -23,3 +23,44 @@ Thumbs.db
 # Build output
 build/
 dist/
+# venvs
+.venv/
+venv/
+
+# caches / models / data
+data/
+hf_cache/
+lora_mistral_output/
+**/*.gguf
+**/*.safetensors
+**/*.pt
+**/*.bin
+**/*.ckpt
+**/*.onnx
+**/*.npy
+**/*.npz
+**/*.parquet
+**/*.sqlite
+
+# archives/media
+**/*.zip
+**/*.7z
+**/*.tar
+**/*.gz
+**/*.mp4
+**/*.wav
+**/*.flac
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+
+# IDE/OS
+.vscode/
+.DS_Store
+Thumbs.db
