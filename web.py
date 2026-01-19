@@ -1,6 +1,8 @@
 """Flask web server for Jarvis chat interface."""
 import base64
 import io
+import re
+import subprocess
 from collections import deque
 from datetime import datetime
 
@@ -24,6 +26,64 @@ def log_chat(ip: str, user_msg: str, assistant_msg: str):
         "user": user_msg,
         "assistant": assistant_msg,
     })
+
+
+def run_nslookup(target: str) -> str:
+    """Run nslookup on a domain or IP."""
+    # Sanitize input - only allow alphanumeric, dots, and hyphens
+    if not re.match(r'^[\w\.\-]+$', target):
+        return "Invalid target"
+    try:
+        result = subprocess.run(
+            ["nslookup", target],
+            capture_output=True, text=True, timeout=10
+        )
+        return result.stdout or result.stderr
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def run_whois(target: str) -> str:
+    """Run whois on a domain or IP."""
+    if not re.match(r'^[\w\.\-]+$', target):
+        return "Invalid target"
+    try:
+        result = subprocess.run(
+            ["whois", target],
+            capture_output=True, text=True, timeout=15
+        )
+        # Truncate long whois output
+        output = result.stdout or result.stderr
+        if len(output) > 1500:
+            output = output[:1500] + "\n... (truncated)"
+        return output
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def handle_network_command(message: str, client_ip: str) -> str | None:
+    """Check for network commands and handle them directly."""
+    msg_lower = message.lower().strip()
+
+    # "my ip" or "what's my ip"
+    if any(p in msg_lower for p in ["my ip", "my public ip", "what is my ip", "whats my ip"]):
+        return f"Your public IP address is: {client_ip}"
+
+    # nslookup command
+    nslookup_match = re.match(r'(?:nslookup|dns lookup|lookup)\s+(\S+)', msg_lower)
+    if nslookup_match:
+        target = nslookup_match.group(1)
+        result = run_nslookup(target)
+        return f"NSLookup for {target}:\n```\n{result}\n```"
+
+    # whois command
+    whois_match = re.match(r'whois\s+(\S+)', msg_lower)
+    if whois_match:
+        target = whois_match.group(1)
+        result = run_whois(target)
+        return f"WHOIS for {target}:\n```\n{result}\n```"
+
+    return None
 
 
 def build_web_prompt(user_text: str) -> str:
@@ -105,12 +165,21 @@ def chat():
         return jsonify({"error": "Empty message"}), 400
 
     try:
-        prompt = build_web_prompt(user_message)
-        response = ask_llm(prompt)
-        response = response.strip() or "(no response)"
+        # Get client IP
+        client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+        if "," in client_ip:
+            client_ip = client_ip.split(",")[0].strip()
+
+        # Check for network commands first
+        network_response = handle_network_command(user_message, client_ip)
+        if network_response:
+            response = network_response
+        else:
+            prompt = build_web_prompt(user_message)
+            response = ask_llm(prompt)
+            response = response.strip() or "(no response)"
 
         # Log the interaction
-        client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
         log_chat(client_ip, user_message, response)
 
         result = {"response": response}
