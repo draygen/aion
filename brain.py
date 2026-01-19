@@ -35,7 +35,7 @@ def load_facts(files: List[str] = None) -> int:
     total = 0
     for filename in files:
         if not os.path.exists(filename):
-            print(f"[brain.py] File not found: {filename}")
+
             continue
         with open(filename, "r", encoding="utf-8") as f:
             for line in f:
@@ -54,9 +54,10 @@ def load_facts(files: List[str] = None) -> int:
                     memory.append(fact)
                     total += 1
                 except Exception as e:
-                    print(f"[brain.py] Skipped bad line: {e}")
+                    pass # Skipped bad line
 
-    print(f"[brain.py] Loaded {total} facts from {len(files)} file(s).")
+
+
     return total
 
 

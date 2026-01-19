@@ -1,2 +1,4 @@
 openai
 scikit-learn
+gTTS
+pytest
