@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jarvis Logs</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 1rem;
+            min-height: 100vh;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #30363d;
+        }
+
+        h1 {
+            color: #58a6ff;
+            font-size: 1.25rem;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #3fb950;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        #log-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .log-entry {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 0.75rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.75rem;
+            color: #8b949e;
+        }
+
+        .log-ip {
+            color: #f0883e;
+        }
+
+        .log-time {
+            color: #8b949e;
+        }
+
+        .log-message {
+            margin-bottom: 0.5rem;
+        }
+
+        .log-user {
+            color: #79c0ff;
+        }
+
+        .log-user::before {
+            content: "User: ";
+            color: #8b949e;
+        }
+
+        .log-assistant {
+            color: #a5d6ff;
+            border-left: 2px solid #3fb950;
+            padding-left: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        .log-assistant::before {
+            content: "Jarvis: ";
+            color: #3fb950;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #8b949e;
+            padding: 3rem;
+        }
+
+        #count {
+            background: #30363d;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Jarvis Live Logs</h1>
+        <div class="status">
+            <span class="status-dot"></span>
+            <span>Live</span>
+            <span id="count">0 entries</span>
+        </div>
+    </header>
+
+    <div id="log-container">
+        <div class="empty-state">Waiting for interactions...</div>
+    </div>
+
+    <script>
+        const logContainer = document.getElementById('log-container');
+        const countEl = document.getElementById('count');
+        const key = new URLSearchParams(window.location.search).get('key');
+        let lastCount = 0;
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function renderLogs(logs) {
+            if (logs.length === 0) {
+                logContainer.innerHTML = '<div class="empty-state">Waiting for interactions...</div>';
+                countEl.textContent = '0 entries';
+                return;
+            }
+
+            countEl.textContent = `${logs.length} entries`;
+
+            // Only update if there are new entries
+            if (logs.length === lastCount) return;
+            lastCount = logs.length;
+
+            // Reverse to show newest first
+            const reversed = [...logs].reverse();
+
+            logContainer.innerHTML = reversed.map(log => `
+                <div class="log-entry">
+                    <div class="log-header">
+                        <span class="log-ip">${escapeHtml(log.ip)}</span>
+                        <span class="log-time">${escapeHtml(log.time)}</span>
+                    </div>
+                    <div class="log-message log-user">${escapeHtml(log.user)}</div>
+                    <div class="log-message log-assistant">${escapeHtml(log.assistant)}</div>
+                </div>
+            `).join('');
+        }
+
+        async function fetchLogs() {
+            try {
+                const response = await fetch(`/api/logs?key=${encodeURIComponent(key)}`);
+                if (response.ok) {
+                    const logs = await response.json();
+                    renderLogs(logs);
+                }
+            } catch (err) {
+                console.error('Failed to fetch logs:', err);
+            }
+        }
+
+        // Initial fetch and poll every 3 seconds
+        fetchLogs();
+        setInterval(fetchLogs, 3000);
+    </script>
+</body>
+</html>

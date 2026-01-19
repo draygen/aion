@@ -8,5 +8,8 @@ CONFIG = {
         "data/brian_facts.jsonl",
         "data/fb_qa_pairs.jsonl",
     ],
-    "openai_api_key": "sk-xxxx"  # Change this if using OpenAI
+    "openai_api_key": "sk-xxxx",  # Change this if using OpenAI
+    "elevenlabs_api_key": "",  # Get free key at https://elevenlabs.io
+    "elevenlabs_voice_id": "pNInz6obpgDQGcFmaJgB",  # "Adam" - deep male voice (default)
+    "admin_key": "changeme",  # Secret key to access /logs
 }

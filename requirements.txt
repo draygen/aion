@@ -1,4 +1,6 @@
+flask
 openai
 scikit-learn
 gTTS
+elevenlabs
 pytest
