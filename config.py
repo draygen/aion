@@ -13,6 +13,8 @@ CONFIG = {
     "openai_api_key": "sk-xxxx",  # Change this if using OpenAI
     "elevenlabs_api_key": "sk_00658e431b1b66afac03c4804613864e82dfd15c7e1e2499",
     "elevenlabs_voice_id": "pNInz6obpgDQGcFmaJgB",  # "Adam" - deep male voice (default)
+    "vast_api_key": "",            # Vast.ai API key (get from console.vast.ai/account)
+    "vast_ssh_key": "~/.ssh/id_ed25519",  # SSH key for Vast.ai instances
     "admin_key": "draygen2026",  # Secret key to access /logs
     "admin_password": "changeme2026",  # Brian's initial login password
     "auto_extract_facts": True,        # Auto-extract facts from conversations

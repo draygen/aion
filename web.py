@@ -7,15 +7,16 @@ import subprocess
 from collections import defaultdict, deque
 from datetime import datetime
 
-from flask import Flask, g, render_template, request, jsonify, make_response
+from flask import Flask, g, redirect, render_template, request, jsonify, make_response
 from flask_cors import CORS
 from gtts import gTTS
 
 import auth
+import vast
 from auth import (
     init_db, login_required, admin_required,
     verify_login, create_token, delete_token,
-    create_user, delete_user, get_db,
+    create_user, delete_user, get_db, get_user_by_token,
 )
 from brain import get_facts, add_fact
 from config import CONFIG
@@ -449,6 +450,94 @@ def memory_thread_detail(thread_id):
 
     messages.sort(key=lambda x: x['ts'])
     return jsonify({'thread_id': thread_id, 'messages': messages})
+
+
+# ── Vast.ai admin routes ────────────────────────────────────────────────────
+
+@app.route("/admin")
+def admin_panel():
+    token = request.cookies.get("jarvis_token")
+    if not token:
+        return redirect("/")
+    user = get_user_by_token(token)
+    if not user or user["role"] != "admin":
+        return "Forbidden", 403
+    return render_template("admin.html")
+
+
+@app.route("/api/admin/vast/offers")
+@admin_required
+def api_vast_offers():
+    try:
+        max_dph = request.args.get("max_dph")
+        min_gpu_ram = request.args.get("min_gpu_ram")
+        gpu_name = request.args.get("gpu_name")
+        offers = vast.search_offers(
+            max_dph=float(max_dph) if max_dph else None,
+            min_gpu_ram_gb=float(min_gpu_ram) if min_gpu_ram else None,
+            gpu_name=gpu_name or None,
+        )
+        return jsonify({"offers": offers})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/vast/instances")
+@admin_required
+def api_vast_instances():
+    try:
+        instances = vast.get_instances()
+        return jsonify({"instances": instances})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/vast/deploy", methods=["POST"])
+@admin_required
+def api_vast_deploy():
+    data = request.get_json() or {}
+    offer_id = data.get("offer_id")
+    disk_gb = int(data.get("disk_gb", 40))
+    if not offer_id:
+        return jsonify({"error": "Missing offer_id"}), 400
+    try:
+        result = vast.deploy_on_offer(int(offer_id), disk_gb=disk_gb)
+        return jsonify({"ok": True, "result": result})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/vast/instances/<int:instance_id>", methods=["DELETE"])
+@admin_required
+def api_vast_destroy(instance_id):
+    try:
+        result = vast.destroy_instance(instance_id)
+        return jsonify({"ok": True, "result": result})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/vast/instances/<int:instance_id>/redeploy", methods=["POST"])
+@admin_required
+def api_vast_redeploy(instance_id):
+    data = request.get_json() or {}
+    ssh_host = data.get("ssh_host")
+    ssh_port = data.get("ssh_port")
+    if not ssh_host or not ssh_port:
+        return jsonify({"error": "Missing ssh_host or ssh_port"}), 400
+    try:
+        result = vast.redeploy_code(ssh_host, int(ssh_port))
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

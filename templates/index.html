@@ -238,6 +238,18 @@
             display: none;
         }
         #logout-btn:hover { background: #ff6b6b22; border-color: #ff6b6b; }
+        #admin-btn {
+            background: none;
+            border: 1px solid #00d9ff44;
+            color: #00d9ff;
+            padding: 0.4rem 0.75rem;
+            border-radius: 1rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            text-decoration: none;
+            display: none;
+        }
+        #admin-btn:hover { background: #00d9ff22; border-color: #00d9ff; }
         #mem-btn {
             background: none;
             border: 1px solid #00d9ff44;
@@ -409,6 +421,7 @@
         <span id="user-badge"></span>
         <h1>JARVIS</h1>
         <div class="header-actions">
+            <a id="admin-btn" href="/admin" title="Admin panel">Admin</a>
             <button id="logout-btn" title="Sign out">Logout</button>
             <button id="mem-btn" title="Browse Memory">Memory</button>
             <button id="tts-toggle" title="Toggle Text-to-Speech">TTS ON</button>
@@ -456,7 +469,7 @@
                 const r = await fetch('/api/whoami', { credentials: 'include' });
                 if (r.ok) {
                     const data = await r.json();
-                    onLoginSuccess(data.username);
+                    onLoginSuccess(data.username, data.role);
                 } else {
                     loginOverlay.classList.add('visible');
                     loginUsername.focus();
@@ -485,7 +498,7 @@
                 });
                 const data = await r.json();
                 if (r.ok) {
-                    onLoginSuccess(data.username);
+                    onLoginSuccess(data.username, data.role);
                 } else {
                     showLoginError(data.error || 'Login failed.');
                 }
@@ -500,12 +513,15 @@
             loginError.style.display = 'block';
         }
 
-        function onLoginSuccess(username) {
+        function onLoginSuccess(username, role) {
             loginOverlay.classList.remove('visible');
             loginPassword.value = '';
             userBadge.textContent = username;
             userBadge.style.display = 'block';
             logoutBtn.style.display = 'block';
+            if (role === 'admin') {
+                document.getElementById('admin-btn').style.display = 'block';
+            }
             messageInput.focus();
         }
 

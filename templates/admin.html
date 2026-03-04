@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jarvis — Admin</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+
+        header {
+            background: #16213e;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #0f3460;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        header h1 { font-size: 1.2rem; color: #00d9ff; letter-spacing: 0.08em; }
+        .header-right { display: flex; gap: 0.75rem; align-items: center; }
+
+        .api-status {
+            font-size: 0.8rem;
+            color: #888;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #888; }
+        .dot.green { background: #4caf50; }
+        .dot.red   { background: #f44336; }
+
+        .btn {
+            padding: 0.45rem 1rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.15s;
+        }
+        .btn-ghost {
+            background: none;
+            border: 1px solid #0f3460;
+            color: #aaa;
+        }
+        .btn-ghost:hover { border-color: #00d9ff; color: #00d9ff; }
+        .btn-primary { background: #00d9ff; color: #1a1a2e; }
+        .btn-primary:hover { background: #00b8d9; }
+        .btn-danger { background: none; border: 1px solid #f4433644; color: #f44336; }
+        .btn-danger:hover { background: #f4433622; border-color: #f44336; }
+        .btn-warn { background: none; border: 1px solid #ff980044; color: #ff9800; }
+        .btn-warn:hover { background: #ff980022; border-color: #ff9800; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        main { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+
+        section { margin-bottom: 2rem; }
+        .section-title {
+            font-size: 0.7rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: #00d9ff88;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #0f3460;
+        }
+
+        /* Instances */
+        .instance-grid { display: flex; flex-direction: column; gap: 0.75rem; }
+
+        .instance-card {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 0.75rem;
+            padding: 1rem 1.25rem;
+        }
+        .instance-card.running  { border-left: 3px solid #4caf50; }
+        .instance-card.loading  { border-left: 3px solid #ff9800; }
+        .instance-card.exited   { border-left: 3px solid #f44336; }
+        .instance-card.offline  { border-left: 3px solid #666; }
+
+        .inst-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 0.6rem;
+        }
+        .inst-id { font-size: 0.78rem; color: #888; }
+        .inst-gpu { font-size: 1rem; font-weight: 600; color: #eee; }
+        .inst-price { font-size: 1rem; color: #00d9ff; font-weight: 600; white-space: nowrap; }
+
+        .inst-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem 1.5rem;
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 0.75rem;
+        }
+        .inst-meta span { display: flex; align-items: center; gap: 0.3rem; }
+        .inst-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.75rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 2rem;
+            background: #0f3460;
+        }
+        .inst-status-badge.running { color: #4caf50; }
+        .inst-status-badge.loading { color: #ff9800; }
+        .inst-status-badge.exited  { color: #f44336; }
+
+        .inst-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #555;
+            font-size: 0.9rem;
+            background: #16213e22;
+            border: 1px dashed #0f3460;
+            border-radius: 0.75rem;
+        }
+
+        /* Search filters */
+        .filters {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin-bottom: 1rem;
+            background: #16213e;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid #0f3460;
+        }
+        .filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
+        .filter-group label { font-size: 0.72rem; color: #888; letter-spacing: 0.05em; }
+        .filter-group input {
+            padding: 0.45rem 0.75rem;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-radius: 0.4rem;
+            color: #eee;
+            font-size: 0.9rem;
+            width: 120px;
+            outline: none;
+        }
+        .filter-group input:focus { border-color: #00d9ff; }
+
+        /* Offers table */
+        .offers-wrap { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        thead th {
+            text-align: left;
+            padding: 0.6rem 0.75rem;
+            border-bottom: 1px solid #0f3460;
+            color: #888;
+            font-size: 0.72rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        tbody tr { border-bottom: 1px solid #0f346022; transition: background 0.1s; }
+        tbody tr:last-child { border-bottom: none; }
+        tbody tr:hover { background: #16213e; }
+        tbody td { padding: 0.6rem 0.75rem; vertical-align: middle; }
+
+        .gpu-cell { font-weight: 600; color: #eee; }
+        .price-cell { color: #00d9ff; font-weight: 700; white-space: nowrap; }
+        .rel-cell { font-size: 0.8rem; }
+        .rel-high { color: #4caf50; }
+        .rel-med  { color: #ff9800; }
+        .rel-low  { color: #f44336; }
+
+        #offers-loading, #offers-empty {
+            text-align: center;
+            padding: 2rem;
+            color: #555;
+            font-size: 0.9rem;
+        }
+
+        /* Deploy modal */
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #00000099;
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        #modal-overlay.open { display: flex; }
+        #modal-box {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 1rem;
+            padding: 1.75rem;
+            width: 380px;
+            max-width: 95vw;
+        }
+        #modal-box h3 { color: #00d9ff; margin-bottom: 1rem; font-size: 1.1rem; }
+        #modal-details {
+            background: #1a1a2e;
+            border-radius: 0.5rem;
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            line-height: 1.8;
+            margin-bottom: 1rem;
+            color: #ccc;
+        }
+        .modal-field { display: flex; justify-content: space-between; }
+        .modal-field span:first-child { color: #888; }
+        .modal-field span:last-child  { color: #eee; font-weight: 600; }
+        #modal-disk-label { font-size: 0.78rem; color: #888; margin-bottom: 0.3rem; display: block; }
+        #modal-disk {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-radius: 0.4rem;
+            color: #eee;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            outline: none;
+        }
+        #modal-disk:focus { border-color: #00d9ff; }
+        .modal-actions { display: flex; gap: 0.5rem; }
+        #modal-result { font-size: 0.82rem; margin-top: 0.75rem; }
+        #modal-result.ok  { color: #4caf50; }
+        #modal-result.err { color: #f44336; }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 0.5rem;
+            padding: 0.75rem 1.25rem;
+            font-size: 0.85rem;
+            color: #eee;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s;
+            pointer-events: none;
+            z-index: 200;
+            max-width: 320px;
+        }
+        #toast.show { opacity: 1; transform: translateY(0); }
+        #toast.ok  { border-color: #4caf5066; color: #4caf50; }
+        #toast.err { border-color: #f4433666; color: #f44336; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>⚡ JARVIS ADMIN</h1>
+    <div class="header-right">
+        <div class="api-status">
+            <div class="dot" id="api-dot"></div>
+            <span id="api-status-text">Checking…</span>
+        </div>
+        <button class="btn btn-ghost" onclick="refreshAll()">↻ Refresh</button>
+        <a href="/" style="text-decoration:none">
+            <button class="btn btn-ghost">← Chat</button>
+        </a>
+    </div>
+</header>
+
+<main>
+
+    <!-- Running Instances -->
+    <section>
+        <div class="section-title">Running Instances</div>
+        <div class="instance-grid" id="instances-list">
+            <div class="empty-state">Loading…</div>
+        </div>
+    </section>
+
+    <!-- Find GPU Servers -->
+    <section>
+        <div class="section-title">Find GPU Servers</div>
+
+        <div class="filters">
+            <div class="filter-group">
+                <label>Max $/hr</label>
+                <input type="number" id="f-max-dph" placeholder="e.g. 2.00" step="0.1" min="0">
+            </div>
+            <div class="filter-group">
+                <label>Min GPU VRAM (GB)</label>
+                <input type="number" id="f-min-vram" placeholder="e.g. 16" step="1" min="0">
+            </div>
+            <div class="filter-group">
+                <label>GPU Name (optional)</label>
+                <input type="text" id="f-gpu-name" placeholder="e.g. RTX_4090" style="width:160px">
+            </div>
+            <div class="filter-group" style="justify-content:flex-end">
+                <label>&nbsp;</label>
+                <button class="btn btn-primary" id="search-btn" onclick="searchOffers()">🔍 Search</button>
+            </div>
+        </div>
+
+        <div class="offers-wrap">
+            <div id="offers-loading" style="display:none">Loading offers…</div>
+            <div id="offers-empty" style="display:none">No offers found. Try relaxing the filters.</div>
+            <table id="offers-table" style="display:none">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>GPU</th>
+                        <th>VRAM</th>
+                        <th>Count</th>
+                        <th>System RAM</th>
+                        <th>Disk</th>
+                        <th>Net (↑↓ Mbps)</th>
+                        <th>Reliability</th>
+                        <th>$/hr</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="offers-body"></tbody>
+            </table>
+        </div>
+    </section>
+
+</main>
+
+<!-- Deploy modal -->
+<div id="modal-overlay">
+    <div id="modal-box">
+        <h3>Deploy Jarvis</h3>
+        <div id="modal-details"></div>
+        <label id="modal-disk-label" for="modal-disk">Disk (GB)</label>
+        <input type="number" id="modal-disk" value="40" min="16" max="500">
+        <div class="modal-actions">
+            <button class="btn btn-primary" id="modal-confirm-btn" onclick="confirmDeploy()">🚀 Deploy</button>
+            <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        </div>
+        <div id="modal-result"></div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+    let pendingOffer = null;
+
+    // ── Utilities ───────────────────────────────────────────────────────────
+    function fmt(v, unit='') { return v != null ? `${v}${unit}` : '—'; }
+    function fmtGb(mb) { return mb ? `${(mb/1024).toFixed(0)} GB` : '—'; }
+    function fmtRel(r) {
+        if (r == null) return '—';
+        const pct = (r * 100).toFixed(1) + '%';
+        return r >= 0.99 ? `<span class="rel-cell rel-high">${pct}</span>`
+             : r >= 0.95 ? `<span class="rel-cell rel-med">${pct}</span>`
+                         : `<span class="rel-cell rel-low">${pct}</span>`;
+    }
+    function fmtUptime(secs) {
+        if (!secs) return '—';
+        const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+        return h ? `${h}h ${m}m` : `${m}m`;
+    }
+    function statusClass(s) {
+        if (!s) return 'offline';
+        s = s.toLowerCase();
+        if (s === 'running') return 'running';
+        if (s === 'exited' || s === 'stopped') return 'exited';
+        return 'loading';
+    }
+
+    function toast(msg, type='ok') {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.className = 'show ' + type;
+        clearTimeout(el._t);
+        el._t = setTimeout(() => el.className = '', 3500);
+    }
+
+    // ── Auth check ──────────────────────────────────────────────────────────
+    async function checkAdmin() {
+        const r = await fetch('/api/whoami', { credentials: 'include' });
+        if (!r.ok) { location.href = '/'; return false; }
+        const d = await r.json();
+        if (d.role !== 'admin') { document.body.innerHTML = '<p style="padding:2rem;color:#f44336">Access denied.</p>'; return false; }
+        return true;
+    }
+
+    // ── API status ──────────────────────────────────────────────────────────
+    async function checkApiStatus() {
+        const dot = document.getElementById('api-dot');
+        const txt = document.getElementById('api-status-text');
+        try {
+            const r = await fetch('/api/admin/vast/instances', { credentials: 'include' });
+            if (r.ok) {
+                dot.className = 'dot green';
+                txt.textContent = 'Vast.ai Connected';
+            } else {
+                const d = await r.json();
+                dot.className = 'dot red';
+                txt.textContent = d.error || 'API Error';
+            }
+        } catch(e) {
+            dot.className = 'dot red';
+            txt.textContent = 'Error';
+        }
+    }
+
+    // ── Instances ───────────────────────────────────────────────────────────
+    async function loadInstances() {
+        const container = document.getElementById('instances-list');
+        try {
+            const r = await fetch('/api/admin/vast/instances', { credentials: 'include' });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.error);
+            const list = d.instances || [];
+            if (!list.length) {
+                container.innerHTML = '<div class="empty-state">No running instances.</div>';
+                return;
+            }
+            container.innerHTML = list.map(renderInstance).join('');
+        } catch(e) {
+            container.innerHTML = `<div class="empty-state" style="color:#f44336">Error: ${esc(e.message)}</div>`;
+        }
+    }
+
+    function renderInstance(inst) {
+        const sc = statusClass(inst.actual_status || inst.cur_state);
+        const gpu = inst.num_gpus > 1
+            ? `${inst.gpu_name} × ${inst.num_gpus}`
+            : (inst.gpu_name || 'Unknown GPU');
+        const vram = fmtGb(inst.gpu_totalram || inst.gpu_ram);
+        const ram  = fmtGb(inst.cpu_ram);
+        const ssh  = inst.ssh_host ? `${inst.ssh_host}:${inst.ssh_port}` : '—';
+        const web  = inst.public_ipaddr ? `http://${inst.public_ipaddr}:5000` : null;
+        const uptime = fmtUptime(inst.uptime_mins ? inst.uptime_mins * 60 : null);
+
+        return `
+        <div class="instance-card ${sc}">
+            <div class="inst-top">
+                <div>
+                    <div class="inst-id">#${inst.id} &nbsp;·&nbsp; <span class="inst-status-badge ${sc}">
+                        <span class="dot ${sc === 'running' ? 'green' : sc === 'exited' ? 'red' : ''}"></span>
+                        ${inst.actual_status || inst.cur_state || 'unknown'}
+                    </span></div>
+                    <div class="inst-gpu">${esc(gpu)} &nbsp;(${vram} VRAM)</div>
+                </div>
+                <div class="inst-price">$${(inst.dph_total||0).toFixed(3)}/hr</div>
+            </div>
+            <div class="inst-meta">
+                <span>💻 ${esc(inst.cpu_name||'—')} · ${inst.cpu_cores||'?'} cores · ${ram} RAM</span>
+                <span>💾 ${fmt(inst.disk_space, ' GB')} disk</span>
+                ${ssh !== '—' ? `<span>🔑 SSH: <code style="color:#00d9ff;font-size:0.78rem">root@${esc(ssh)}</code></span>` : ''}
+                ${web ? `<span>🌐 <a href="${esc(web)}" target="_blank" style="color:#00d9ff;font-size:0.8rem">${esc(web)}</a></span>` : ''}
+                ${uptime !== '—' ? `<span>⏱ Uptime: ${uptime}</span>` : ''}
+            </div>
+            <div class="inst-actions">
+                ${inst.ssh_host ? `
+                <button class="btn btn-warn" onclick="redeployInstance(${inst.id}, '${esc(inst.ssh_host)}', ${inst.ssh_port})">
+                    ↑ Redeploy Code
+                </button>` : ''}
+                <button class="btn btn-danger" onclick="destroyInstance(${inst.id})">
+                    🗑 Destroy
+                </button>
+            </div>
+        </div>`;
+    }
+
+    // ── Offers ──────────────────────────────────────────────────────────────
+    async function searchOffers() {
+        const btn = document.getElementById('search-btn');
+        const loading = document.getElementById('offers-loading');
+        const empty   = document.getElementById('offers-empty');
+        const table   = document.getElementById('offers-table');
+        const body    = document.getElementById('offers-body');
+
+        btn.disabled = true;
+        loading.style.display = 'block';
+        empty.style.display = 'none';
+        table.style.display = 'none';
+
+        const params = new URLSearchParams();
+        const maxDph  = document.getElementById('f-max-dph').value;
+        const minVram = document.getElementById('f-min-vram').value;
+        const gpuName = document.getElementById('f-gpu-name').value;
+        if (maxDph)  params.set('max_dph', maxDph);
+        if (minVram) params.set('min_gpu_ram', minVram);
+        if (gpuName) params.set('gpu_name', gpuName);
+
+        try {
+            const r = await fetch('/api/admin/vast/offers?' + params, { credentials: 'include' });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.error);
+            const offers = d.offers || [];
+
+            loading.style.display = 'none';
+            if (!offers.length) { empty.style.display = 'block'; btn.disabled = false; return; }
+
+            body.innerHTML = offers.map((o, i) => `
+                <tr>
+                    <td style="color:#555">${i+1}</td>
+                    <td class="gpu-cell">${esc(o.gpu_name||'?')}</td>
+                    <td>${fmtGb(o.gpu_ram)}</td>
+                    <td style="text-align:center">${o.num_gpus||1}</td>
+                    <td>${fmtGb(o.cpu_ram)}</td>
+                    <td>${fmt(o.disk_space, ' GB')}</td>
+                    <td style="font-size:0.78rem;color:#888">${o.inet_up ? Math.round(o.inet_up) : '?'} / ${o.inet_down ? Math.round(o.inet_down) : '?'}</td>
+                    <td>${fmtRel(o.reliability || o.reliability2)}</td>
+                    <td class="price-cell">$${(o.dph_total||0).toFixed(3)}</td>
+                    <td><button class="btn btn-primary" style="font-size:0.78rem;padding:0.35rem 0.75rem"
+                        onclick="openDeploy(${o.id}, ${JSON.stringify(esc(o.gpu_name||'?'))}, ${o.num_gpus||1}, ${(o.dph_total||0).toFixed(3)}, ${fmtGb(o.gpu_ram).replace(' GB','')})">
+                        🚀 Deploy
+                    </button></td>
+                </tr>`).join('');
+
+            table.style.display = 'table';
+        } catch(e) {
+            loading.style.display = 'none';
+            empty.style.display = 'block';
+            empty.textContent = 'Error: ' + e.message;
+        }
+        btn.disabled = false;
+    }
+
+    // ── Deploy modal ────────────────────────────────────────────────────────
+    function openDeploy(offerId, gpuName, numGpus, dph, vramGb) {
+        pendingOffer = offerId;
+        document.getElementById('modal-details').innerHTML = `
+            <div class="modal-field"><span>GPU</span><span>${gpuName} × ${numGpus}</span></div>
+            <div class="modal-field"><span>VRAM</span><span>${vramGb} GB</span></div>
+            <div class="modal-field"><span>Price</span><span style="color:#00d9ff">$${parseFloat(dph).toFixed(3)}/hr</span></div>
+            <div class="modal-field"><span>Image</span><span>ubuntu:22.04</span></div>
+            <div class="modal-field"><span>Auto-deploys</span><span>Ollama + qwen2.5:7b + Jarvis</span></div>`;
+        document.getElementById('modal-result').textContent = '';
+        document.getElementById('modal-confirm-btn').disabled = false;
+        document.getElementById('modal-overlay').classList.add('open');
+    }
+
+    function closeModal() {
+        document.getElementById('modal-overlay').classList.remove('open');
+        pendingOffer = null;
+    }
+
+    async function confirmDeploy() {
+        if (!pendingOffer) return;
+        const diskGb = parseInt(document.getElementById('modal-disk').value) || 40;
+        const btn = document.getElementById('modal-confirm-btn');
+        const result = document.getElementById('modal-result');
+        btn.disabled = true;
+        result.className = '';
+        result.textContent = 'Deploying…';
+
+        try {
+            const r = await fetch('/api/admin/vast/deploy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ offer_id: pendingOffer, disk_gb: diskGb }),
+            });
+            const d = await r.json();
+            if (!r.ok || !d.ok) throw new Error(d.error || 'Deploy failed');
+            const contractId = d.result?.new_contract || '?';
+            result.className = 'ok';
+            result.textContent = `✓ Instance #${contractId} created — setup takes ~3 min`;
+            toast(`Deployed! Instance #${contractId}`, 'ok');
+            setTimeout(() => { closeModal(); loadInstances(); }, 2000);
+        } catch(e) {
+            result.className = 'err';
+            result.textContent = '✗ ' + e.message;
+            btn.disabled = false;
+        }
+    }
+
+    // ── Instance actions ────────────────────────────────────────────────────
+    async function destroyInstance(id) {
+        if (!confirm(`Destroy instance #${id}? This is irreversible and deletes all data.`)) return;
+        try {
+            const r = await fetch(`/api/admin/vast/instances/${id}`, {
+                method: 'DELETE', credentials: 'include',
+            });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.error);
+            toast(`Instance #${id} destroyed`, 'ok');
+            loadInstances();
+        } catch(e) {
+            toast('Destroy failed: ' + e.message, 'err');
+        }
+    }
+
+    async function redeployInstance(id, sshHost, sshPort) {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = 'Deploying…';
+        try {
+            const r = await fetch(`/api/admin/vast/instances/${id}/redeploy`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ ssh_host: sshHost, ssh_port: sshPort }),
+            });
+            const d = await r.json();
+            if (!r.ok || !d.ok) throw new Error(d.error || 'Redeploy failed');
+            toast('Code deployed and Jarvis restarted ✓', 'ok');
+        } catch(e) {
+            toast('Redeploy failed: ' + e.message, 'err');
+        }
+        btn.disabled = false;
+        btn.textContent = '↑ Redeploy Code';
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+    function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    function refreshAll() { loadInstances(); }
+
+    document.getElementById('modal-overlay').addEventListener('click', e => {
+        if (e.target === document.getElementById('modal-overlay')) closeModal();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+    document.getElementById('f-gpu-name').addEventListener('keypress', e => { if (e.key === 'Enter') searchOffers(); });
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+    (async () => {
+        if (!await checkAdmin()) return;
+        await Promise.all([checkApiStatus(), loadInstances()]);
+        // Auto-load offers with no filters on start
+        searchOffers();
+    })();
+</script>
+</body>
+</html>
