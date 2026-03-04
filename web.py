@@ -1,10 +1,11 @@
 """Flask web server for Jarvis chat interface."""
 import base64
 import io
+import json
 import re
 import secrets
 import subprocess
-from collections import deque
+from collections import defaultdict, deque
 from datetime import datetime
 
 from flask import Flask, render_template, request, jsonify, make_response
@@ -25,6 +26,18 @@ _SESSION_TURNS = 20
 
 # Store recent chat logs (max 100 entries)
 chat_logs = deque(maxlen=100)
+
+# Memory browser constants
+_JENN_MSGS_FILE = 'data/jenn_messages.jsonl'
+_MEMORY_CATEGORIES = {
+    'Birth & Pregnancy': ['pregnant', 'pregnancy', 'baby', 'birth', 'newborn', 'expecting', 'due date'],
+    'Love & Relationships': ['married', 'wedding', 'divorce', 'engaged', 'boyfriend', 'girlfriend', 'broke up', 'breakup', 'cheating'],
+    'Family & Parenting': ['custody', 'dcf', 'child support', 'sole custody', 'visitation', 'foster'],
+    'Health & Wellbeing': ['sick', 'hospital', 'surgery', 'cancer', 'mental health', 'therapy', 'depression', 'anxiety', 'self harm', 'self-harm', 'cutting'],
+    'Loss & Grief': ['died', 'death', 'passed away', 'funeral', 'grief', 'rest in peace', 'rip'],
+    'Major Life Events': ['moved', 'new apartment', 'new house', 'new job', 'fired', 'arrested', 'jail', 'graduated', 'graduation'],
+}
+_mem_browse_cache = None
 
 
 def log_chat(ip: str, user_msg: str, assistant_msg: str):
@@ -243,6 +256,124 @@ def api_logs():
     if key != CONFIG.get("admin_key", ""):
         return jsonify({"error": "Unauthorized"}), 401
     return jsonify(list(chat_logs))
+
+
+@app.route("/api/memory/browse")
+def memory_browse():
+    """Return Jenn's message threads organized by category."""
+    global _mem_browse_cache
+    if _mem_browse_cache:
+        return jsonify({'categories': _mem_browse_cache})
+
+    threads = {}
+    thread_text = defaultdict(list)
+
+    try:
+        with open(_JENN_MSGS_FILE, encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    tid = obj.get('thread_id', '')
+                    if not tid:
+                        continue
+                    ts_s = obj.get('ts_start') or 0
+                    ts_e = obj.get('ts_end') or 0
+
+                    if tid not in threads:
+                        threads[tid] = {
+                            'thread_id': tid,
+                            'display': obj.get('thread') or tid,
+                            'ts_start': ts_s,
+                            'ts_end': ts_e,
+                            'msg_count': 0,
+                        }
+                    else:
+                        t = threads[tid]
+                        if ts_s and ts_s < t['ts_start']:
+                            t['ts_start'] = ts_s
+                        if ts_e and ts_e > t['ts_end']:
+                            t['ts_end'] = ts_e
+
+                    is_chunk = obj.get('output', '').startswith('Thread: ')
+                    if is_chunk:
+                        if len(thread_text[tid]) < 4:
+                            thread_text[tid].append(obj.get('output', ''))
+                    else:
+                        threads[tid]['msg_count'] += 1
+                except Exception:
+                    continue
+    except FileNotFoundError:
+        return jsonify({'categories': {}})
+
+    categorized = defaultdict(list)
+    for tid, info in threads.items():
+        sample = ' '.join(thread_text.get(tid, [])).lower()
+        cats = [c for c, kws in _MEMORY_CATEGORIES.items() if any(kw in sample for kw in kws)]
+        for cat in (cats or ['General']):
+            categorized[cat].append(info)
+
+    result = {cat: sorted(lst, key=lambda x: x['ts_start']) for cat, lst in categorized.items()}
+    _mem_browse_cache = result
+    return jsonify({'categories': result})
+
+
+@app.route("/api/memory/thread/<thread_id>")
+def memory_thread_detail(thread_id):
+    """Return individual messages for a thread."""
+    if not re.match(r'^\w+$', thread_id):
+        return jsonify({'error': 'Invalid thread_id'}), 400
+
+    messages = []
+    try:
+        with open(_JENN_MSGS_FILE, encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    if obj.get('thread_id') != thread_id:
+                        continue
+                    if obj.get('output', '').startswith('Thread: '):
+                        continue  # skip window chunks
+
+                    output = obj.get('output', '')
+                    nl = output.find('\n')
+                    if nl < 0:
+                        continue
+                    header = output[:nl]
+                    rest = output[nl + 1:].strip()
+                    if rest.startswith('"'):
+                        rest = rest[1:]
+                    if rest.endswith('"'):
+                        rest = rest[:-1]
+
+                    m = re.match(r'\[([^\]]+)\] From: (.+?) → To: (.+?)(?:\s+\[(.+?)\])?$', header)
+                    if not m:
+                        continue
+
+                    messages.append({
+                        'ts': obj.get('ts_start') or 0,
+                        'timestamp': m.group(1),
+                        'sender': m.group(2).strip(),
+                        'recipient': m.group(3).strip(),
+                        'note': m.group(4) or '',
+                        'content': rest,
+                        'post_death': bool(obj.get('post_death')),
+                    })
+                except Exception:
+                    continue
+    except FileNotFoundError:
+        return jsonify({'error': 'Data not found'}), 404
+
+    if not messages:
+        return jsonify({'error': 'Thread not found'}), 404
+
+    messages.sort(key=lambda x: x['ts'])
+    return jsonify({'thread_id': thread_id, 'messages': messages})
 
 
 if __name__ == "__main__":
