@@ -9,6 +9,11 @@
 # Web:      https://drayhub.org
 
 set -e
+
+echo "==> Fixing line endings..."
+find . -maxdepth 1 \( -name "*.py" -o -name "*.sh" -o -name "*.html" \) \
+  -not -path './.venv*' | xargs sed -i 's/\r//'
+
 HOST="root@ssh4.vast.ai"
 SSH_PORT="11950"
 SSH_KEY="$HOME/.ssh/id_ed25519"
