@@ -36,8 +36,6 @@
         }
 
         #tts-toggle {
-            position: absolute;
-            right: 1rem;
             background: none;
             border: 2px solid #00d9ff;
             color: #00d9ff;
@@ -45,6 +43,7 @@
             border-radius: 1rem;
             cursor: pointer;
             font-size: 0.85rem;
+            white-space: nowrap;
             transition: all 0.2s;
         }
 
@@ -256,8 +255,13 @@
         .mem-cat-title { flex: 1; font-weight: 600; color: #eee; font-size: 0.95rem; }
         .mem-cat-count { font-size: 0.78rem; color: #666; }
 
-        .mem-convs { display: none; background: #131e30; }
-        .mem-convs.open { display: block; }
+        .mem-convs {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.28s ease-out;
+            background: #131e30;
+        }
+        .mem-convs.open { max-height: 4000px; transition: max-height 0.4s ease-in; }
 
         /* Conversation row */
         .mem-conv {
@@ -276,17 +280,21 @@
 
         /* Expanded messages */
         .mem-messages-wrap {
-            display: none;
-            padding: 0.75rem 1rem 0.75rem 1.5rem;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.35s ease;
             background: #0d1929;
-            border-top: 1px solid #0f3460;
-            border-bottom: 1px solid #0f3460;
-            max-height: 60vh;
-            overflow-y: auto;
+            display: flex;
             flex-direction: column;
             gap: 0.4rem;
         }
-        .mem-messages-wrap.open { display: flex; }
+        .mem-messages-wrap.open {
+            max-height: 55vh;
+            overflow-y: auto;
+            padding: 0.75rem 1rem 0.75rem 1.5rem;
+            border-top: 1px solid #0f3460;
+            border-bottom: 1px solid #0f3460;
+        }
         .mem-loading-msg { color: #888; font-size: 0.85rem; text-align: center; padding: 0.5rem; }
 
         /* Chat bubbles */

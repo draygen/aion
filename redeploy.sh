@@ -5,17 +5,18 @@
 # Usage: ./redeploy.sh
 #
 # Instance: A100 SXM4 40GB  |  $0.468/hr  |  id: 32361950
-# Web:      http://192.165.134.28:12557
-# SSH:      ssh -p 12663 root@192.165.134.28
+# SSH:      ssh -p 11950 -i ~/.ssh/id_ed25519 root@ssh4.vast.ai
+# Web:      https://drayhub.org
 
 set -e
-HOST="root@192.165.134.28"
-SSH_PORT="12663"
-SSH="ssh -o StrictHostKeyChecking=no -p $SSH_PORT"
+HOST="root@ssh4.vast.ai"
+SSH_PORT="11950"
+SSH_KEY="$HOME/.ssh/id_ed25519"
+SSH="ssh -o StrictHostKeyChecking=no -p $SSH_PORT -i $SSH_KEY"
 
 echo "==> Syncing code..."
 rsync -az \
-  -e "ssh -o StrictHostKeyChecking=no -p $SSH_PORT" \
+  -e "ssh -o StrictHostKeyChecking=no -p $SSH_PORT -i $SSH_KEY" \
   --exclude='data/' \
   --exclude='.venv*' \
   --exclude='__pycache__' \
@@ -29,8 +30,18 @@ rsync -az \
   /mnt/c/jarvis/ $HOST:/workspace/jarvis/
 
 echo "==> Restarting Jarvis..."
-$SSH $HOST "pkill -f gunicorn || true; sleep 1; cd /workspace/jarvis && nohup gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 web:app > /var/log/jarvis.log 2>&1 &; sleep 3; curl -s http://localhost:5000/ | grep -o '<title>[^<]*</title>'"
+# Note: use 'pkill gunicorn' (not -f) — pkill -f matches the SSH session cmdline and kills itself
+$SSH $HOST 'cat > /tmp/start_jarvis.sh << SCRIPT
+#!/bin/bash
+pkill gunicorn || true
+sleep 1
+cd /workspace/jarvis
+exec nohup gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 web:app >> /var/log/jarvis.log 2>&1
+SCRIPT
+chmod +x /tmp/start_jarvis.sh
+setsid /tmp/start_jarvis.sh &
+sleep 3
+curl -s http://localhost:5000/ | grep -o "<title>[^<]*</title>"'
 
 echo "==> Done."
-echo "    Local:  http://192.165.134.28:12557"
 echo "    Public: https://drayhub.org"
