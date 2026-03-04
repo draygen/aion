@@ -3,6 +3,9 @@ venv/
 __pycache__/
 .vscode/
 
+# Local secrets — never commit
+config_local.py
+
 # caches / datasets / model outputs
 data/
 hf_cache/
