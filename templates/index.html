@@ -165,6 +165,52 @@
             .message { max-width: 90%; }
         }
 
+        /* Login overlay */
+        #login-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #1a1a2eee;
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+        }
+        #login-overlay.visible { display: flex; }
+        #login-box {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 1rem;
+            padding: 2rem;
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        #login-box h2 { color: #00d9ff; text-align: center; font-size: 1.4rem; }
+        #login-box input {
+            padding: 0.75rem 1rem;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-radius: 0.5rem;
+            color: #eee;
+            font-size: 1rem;
+            outline: none;
+        }
+        #login-box input:focus { border-color: #00d9ff; }
+        #login-submit {
+            padding: 0.75rem;
+            background: #00d9ff;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #login-submit:hover { background: #00b8d9; }
+        #login-error { color: #ff6b6b; font-size: 0.85rem; text-align: center; display: none; }
+
         /* Header actions */
         .header-actions {
             position: absolute;
@@ -173,6 +219,25 @@
             gap: 0.5rem;
             align-items: center;
         }
+        #user-badge {
+            position: absolute;
+            left: 1rem;
+            font-size: 0.8rem;
+            color: #00d9ff99;
+            display: none;
+        }
+        #logout-btn {
+            background: none;
+            border: 1px solid #ff6b6b44;
+            color: #ff6b6b;
+            padding: 0.4rem 0.75rem;
+            border-radius: 1rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            display: none;
+        }
+        #logout-btn:hover { background: #ff6b6b22; border-color: #ff6b6b; }
         #mem-btn {
             background: none;
             border: 1px solid #00d9ff44;
@@ -329,9 +394,22 @@
     </style>
 </head>
 <body>
+    <!-- Login overlay -->
+    <div id="login-overlay" class="visible">
+        <div id="login-box">
+            <h2>JARVIS</h2>
+            <input type="text" id="login-username" placeholder="Username" autocomplete="username">
+            <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+            <button id="login-submit">Sign In</button>
+            <div id="login-error"></div>
+        </div>
+    </div>
+
     <header>
+        <span id="user-badge"></span>
         <h1>JARVIS</h1>
         <div class="header-actions">
+            <button id="logout-btn" title="Sign out">Logout</button>
             <button id="mem-btn" title="Browse Memory">Memory</button>
             <button id="tts-toggle" title="Toggle Text-to-Speech">TTS ON</button>
         </div>
@@ -363,6 +441,85 @@
         const ttsToggle = document.getElementById('tts-toggle');
 
         let ttsEnabled = true;
+
+        // ── Auth ─────────────────────────────────────────────────────────
+        const loginOverlay  = document.getElementById('login-overlay');
+        const loginUsername = document.getElementById('login-username');
+        const loginPassword = document.getElementById('login-password');
+        const loginSubmit   = document.getElementById('login-submit');
+        const loginError    = document.getElementById('login-error');
+        const userBadge     = document.getElementById('user-badge');
+        const logoutBtn     = document.getElementById('logout-btn');
+
+        async function checkAuth() {
+            try {
+                const r = await fetch('/api/whoami', { credentials: 'include' });
+                if (r.ok) {
+                    const data = await r.json();
+                    onLoginSuccess(data.username);
+                } else {
+                    loginOverlay.classList.add('visible');
+                    loginUsername.focus();
+                }
+            } catch (e) {
+                loginOverlay.classList.add('visible');
+                loginUsername.focus();
+            }
+        }
+
+        async function doLogin() {
+            const username = loginUsername.value.trim();
+            const password = loginPassword.value;
+            loginError.style.display = 'none';
+            if (!username || !password) {
+                showLoginError('Please enter username and password.');
+                return;
+            }
+            loginSubmit.disabled = true;
+            try {
+                const r = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password }),
+                });
+                const data = await r.json();
+                if (r.ok) {
+                    onLoginSuccess(data.username);
+                } else {
+                    showLoginError(data.error || 'Login failed.');
+                }
+            } catch (e) {
+                showLoginError('Network error. Try again.');
+            }
+            loginSubmit.disabled = false;
+        }
+
+        function showLoginError(msg) {
+            loginError.textContent = msg;
+            loginError.style.display = 'block';
+        }
+
+        function onLoginSuccess(username) {
+            loginOverlay.classList.remove('visible');
+            loginPassword.value = '';
+            userBadge.textContent = username;
+            userBadge.style.display = 'block';
+            logoutBtn.style.display = 'block';
+            messageInput.focus();
+        }
+
+        logoutBtn.addEventListener('click', async () => {
+            await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+            location.reload();
+        });
+
+        loginSubmit.addEventListener('click', doLogin);
+        loginPassword.addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
+        loginUsername.addEventListener('keypress', e => { if (e.key === 'Enter') loginPassword.focus(); });
+
+        // Check auth on page load
+        checkAuth();
 
         function addMessage(text, type) {
             const msg = document.createElement('div');
@@ -408,13 +565,17 @@
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ message: text, tts: ttsEnabled })
                 });
 
                 const data = await response.json();
                 typing.remove();
 
-                if (data.error) {
+                if (response.status === 401) {
+                    loginOverlay.classList.add('visible');
+                    loginUsername.focus();
+                } else if (data.error) {
                     addMessage(`Error: ${data.error}`, 'assistant error');
                 } else {
                     addMessage(data.response, 'assistant');

@@ -3,26 +3,30 @@ import base64
 import io
 import json
 import re
-import secrets
 import subprocess
 from collections import defaultdict, deque
 from datetime import datetime
 
-from flask import Flask, render_template, request, jsonify, make_response
+from flask import Flask, g, render_template, request, jsonify, make_response
 from flask_cors import CORS
 from gtts import gTTS
 
-from brain import get_facts
+import auth
+from auth import (
+    init_db, login_required, admin_required,
+    verify_login, create_token, delete_token,
+    create_user, delete_user, get_db,
+)
+from brain import get_facts, add_fact
 from config import CONFIG
+from extractor import extract_and_save
 from llm import ask_llm_chat
 
 app = Flask(__name__)
-CORS(app, origins="*")  # Allow Electron (file://) and web clients
+CORS(app, origins="*", supports_credentials=True)
 
-# Per-session conversation history: session_id -> deque of {role, content} dicts
-# Keep last 20 turns per session to stay within context limits
-_sessions: dict = {}
-_SESSION_TURNS = 20
+# Initialize DB (creates tables + Brian's account + migrates facts)
+init_db()
 
 # Store recent chat logs (max 100 entries)
 chat_logs = deque(maxlen=100)
@@ -41,7 +45,6 @@ _mem_browse_cache = None
 
 
 def log_chat(ip: str, user_msg: str, assistant_msg: str):
-    """Log a chat interaction."""
     chat_logs.append({
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "ip": ip,
@@ -51,8 +54,6 @@ def log_chat(ip: str, user_msg: str, assistant_msg: str):
 
 
 def run_nslookup(target: str) -> str:
-    """Run nslookup on a domain or IP."""
-    # Sanitize input - only allow alphanumeric, dots, and hyphens
     if not re.match(r'^[\w\.\-]+$', target):
         return "Invalid target"
     try:
@@ -66,7 +67,6 @@ def run_nslookup(target: str) -> str:
 
 
 def run_whois(target: str) -> str:
-    """Run whois on a domain or IP."""
     if not re.match(r'^[\w\.\-]+$', target):
         return "Invalid target"
     try:
@@ -74,7 +74,6 @@ def run_whois(target: str) -> str:
             ["whois", target],
             capture_output=True, text=True, timeout=15
         )
-        # Truncate long whois output
         output = result.stdout or result.stderr
         if len(output) > 1500:
             output = output[:1500] + "\n... (truncated)"
@@ -84,21 +83,17 @@ def run_whois(target: str) -> str:
 
 
 def handle_network_command(message: str, client_ip: str) -> str | None:
-    """Check for network commands and handle them directly."""
     msg_lower = message.lower().strip()
 
-    # "my ip" or "what's my ip"
     if any(p in msg_lower for p in ["my ip", "my public ip", "what is my ip", "whats my ip"]):
         return f"Your public IP address is: {client_ip}"
 
-    # nslookup command
     nslookup_match = re.match(r'(?:nslookup|dns lookup|lookup)\s+(\S+)', msg_lower)
     if nslookup_match:
         target = nslookup_match.group(1)
         result = run_nslookup(target)
         return f"NSLookup for {target}:\n```\n{result}\n```"
 
-    # whois command
     whois_match = re.match(r'whois\s+(\S+)', msg_lower)
     if whois_match:
         target = whois_match.group(1)
@@ -108,12 +103,16 @@ def handle_network_command(message: str, client_ip: str) -> str | None:
     return None
 
 
-def build_system_prompt(user_text: str) -> str:
-    """Build the system prompt, injecting relevant facts as context."""
+def build_system_prompt(user_text: str, username: str = "brian") -> str:
     facts = get_facts(user_text, k=15)
+    if username.lower() == "brian":
+        identity_line = "You are talking to Brian unless someone explicitly introduces themselves as someone else."
+    else:
+        identity_line = f"You are talking to {username}."
+
     system = (
         "You are JARVIS, an AI assistant created by Brian Wallace (aka draygen).\n"
-        "You are talking to Brian unless someone explicitly introduces themselves as someone else.\n"
+        f"{identity_line}\n"
         "Brian's wife is Jennifer (Jenn) Frotten Wallace.\n"
         "Style: informal, witty, direct, occasionally sarcastic but always loyal to Brian.\n"
         "Keep answers concise unless Brian asks for detail.\n\n"
@@ -131,31 +130,49 @@ def build_system_prompt(user_text: str) -> str:
     return system
 
 
-def generate_tts_elevenlabs(text: str) -> str:
-    """Generate TTS using ElevenLabs API."""
-    from elevenlabs import ElevenLabs
+def _load_user_history(user_id: int) -> list:
+    db = get_db()
+    rows = db.execute(
+        "SELECT role, content FROM history WHERE user_id=? ORDER BY id DESC LIMIT 40",
+        (user_id,),
+    ).fetchall()
+    db.close()
+    return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
+
+def _save_history_turns(user_id: int, user_msg: str, assistant_msg: str):
+    db = get_db()
+    ts = datetime.utcnow().isoformat()
+    db.execute(
+        "INSERT INTO history (user_id, role, content, ts) VALUES (?, ?, ?, ?)",
+        (user_id, "user", user_msg, ts),
+    )
+    db.execute(
+        "INSERT INTO history (user_id, role, content, ts) VALUES (?, ?, ?, ?)",
+        (user_id, "assistant", assistant_msg, ts),
+    )
+    db.commit()
+    db.close()
+
+
+def generate_tts_elevenlabs(text: str) -> str:
+    from elevenlabs import ElevenLabs
     client = ElevenLabs(api_key=CONFIG["elevenlabs_api_key"])
     voice_id = CONFIG.get("elevenlabs_voice_id", "pNInz6obpgDQGcFmaJgB")
-
     audio_generator = client.text_to_speech.convert(
         voice_id=voice_id,
         text=text,
-        model_id="eleven_turbo_v2_5",  # Fast, high quality
+        model_id="eleven_turbo_v2_5",
         output_format="mp3_44100_128",
     )
-
-    # Collect audio chunks
     audio_buffer = io.BytesIO()
     for chunk in audio_generator:
         audio_buffer.write(chunk)
     audio_buffer.seek(0)
-
     return base64.b64encode(audio_buffer.read()).decode("utf-8")
 
 
 def generate_tts_gtts(text: str) -> str:
-    """Generate TTS using Google TTS (fallback)."""
     tts = gTTS(text=text, lang="en")
     audio_buffer = io.BytesIO()
     tts.write_to_fp(audio_buffer)
@@ -164,22 +181,83 @@ def generate_tts_gtts(text: str) -> str:
 
 
 def generate_tts_audio(text: str) -> str:
-    """Generate TTS audio. Uses ElevenLabs if configured, else gTTS."""
     api_key = CONFIG.get("elevenlabs_api_key", "")
     if api_key:
         return generate_tts_elevenlabs(text)
     return generate_tts_gtts(text)
 
 
+# ── Auth endpoints ──────────────────────────────────────────────────────────
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    data = request.get_json() or {}
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+    if not username or not password:
+        return jsonify({"error": "Missing credentials"}), 400
+    user = verify_login(username, password)
+    if not user:
+        return jsonify({"error": "Invalid username or password"}), 401
+    token = create_token(user["id"])
+    resp = make_response(jsonify({"ok": True, "username": user["username"], "role": user["role"]}))
+    resp.set_cookie("jarvis_token", token, max_age=86400 * 30, samesite="Lax", httponly=True)
+    return resp
+
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    token = request.cookies.get("jarvis_token")
+    if token:
+        delete_token(token)
+    resp = make_response(jsonify({"ok": True}))
+    resp.delete_cookie("jarvis_token")
+    return resp
+
+
+@app.route("/api/whoami")
+@login_required
+def api_whoami():
+    return jsonify({"username": g.user["username"], "role": g.user["role"]})
+
+
+@app.route("/api/admin/users", methods=["POST"])
+@admin_required
+def api_admin_create_user():
+    data = request.get_json() or {}
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+    role = data.get("role", "user")
+    if not username or not password:
+        return jsonify({"error": "Missing username or password"}), 400
+    if role not in ("user", "admin"):
+        return jsonify({"error": "Invalid role"}), 400
+    try:
+        user_id = create_user(username, password, role)
+        return jsonify({"ok": True, "id": user_id, "username": username})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 409
+
+
+@app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
+@admin_required
+def api_admin_delete_user(user_id):
+    if user_id == g.user["id"]:
+        return jsonify({"error": "Cannot delete yourself"}), 400
+    delete_user(user_id)
+    return jsonify({"ok": True})
+
+
+# ── Main routes ─────────────────────────────────────────────────────────────
+
 @app.route("/")
 def index():
-    """Serve the chat UI."""
     return render_template("index.html")
 
 
 @app.route("/api/chat", methods=["POST"])
+@login_required
 def chat():
-    """Handle chat messages and return LLM responses."""
     data = request.get_json()
     if not data or "message" not in data:
         return jsonify({"error": "Missing 'message' field"}), 400
@@ -188,61 +266,61 @@ def chat():
     if not user_message:
         return jsonify({"error": "Empty message"}), 400
 
-    # Get or create session ID
-    session_id = request.cookies.get("jarvis_session")
-    if not session_id or session_id not in _sessions:
-        session_id = secrets.token_hex(16)
-        _sessions[session_id] = deque(maxlen=_SESSION_TURNS * 2)
-
-    history = _sessions[session_id]
+    user_id = g.user["id"]
+    username = g.user["username"]
 
     try:
-        # Get client IP
         client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
         if "," in client_ip:
             client_ip = client_ip.split(",")[0].strip()
 
-        # Check for network commands first (bypass LLM)
+        # Explicit remember shortcut — no LLM needed
+        if user_message.lower().startswith("remember:"):
+            fact_text = user_message[len("remember:"):].strip()
+            if fact_text:
+                add_fact(None, fact_text)
+                response = f"Got it. I'll remember: {fact_text}"
+                log_chat(client_ip, user_message, response)
+                return jsonify({"response": response})
+
+        # Network commands bypass LLM
         network_response = handle_network_command(user_message, client_ip)
         if network_response:
             response = network_response
         else:
-            # Build messages: system prompt (with fresh facts) + conversation history + new user message
-            system_prompt = build_system_prompt(user_message)
+            history = _load_user_history(user_id)
+            system_prompt = build_system_prompt(user_message, username)
             messages = [{"role": "system", "content": system_prompt}]
-            messages.extend(list(history))
+            messages.extend(history)
             messages.append({"role": "user", "content": user_message})
 
             response = ask_llm_chat(messages)
             response = response.strip() or "(no response)"
 
-            # Store turns in history
-            history.append({"role": "user", "content": user_message})
-            history.append({"role": "assistant", "content": response})
+            _save_history_turns(user_id, user_message, response)
 
-        # Log the interaction
+            if CONFIG.get("auto_extract_facts", True):
+                extract_and_save(user_message, response, username)
+
         log_chat(client_ip, user_message, response)
 
         result = {"response": response}
 
-        # Generate TTS audio unless disabled
         tts_enabled = data.get("tts", True)
         if tts_enabled and response != "(no response)":
             try:
                 result["audio"] = generate_tts_audio(response)
             except Exception:
-                pass  # TTS failure shouldn't break the response
+                pass
 
-        resp = make_response(jsonify(result))
-        resp.set_cookie("jarvis_session", session_id, max_age=86400, samesite="Lax")
-        return resp
+        return jsonify(result)
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/logs")
 def logs():
-    """View chat logs (protected by admin key)."""
     key = request.args.get("key", "")
     if key != CONFIG.get("admin_key", ""):
         return "Unauthorized", 401
@@ -251,7 +329,6 @@ def logs():
 
 @app.route("/api/logs")
 def api_logs():
-    """Get chat logs as JSON (protected by admin key)."""
     key = request.args.get("key", "")
     if key != CONFIG.get("admin_key", ""):
         return jsonify({"error": "Unauthorized"}), 401
@@ -260,7 +337,6 @@ def api_logs():
 
 @app.route("/api/memory/browse")
 def memory_browse():
-    """Return Jenn's message threads organized by category."""
     global _mem_browse_cache
     if _mem_browse_cache:
         return jsonify({'categories': _mem_browse_cache})
@@ -322,7 +398,6 @@ def memory_browse():
 
 @app.route("/api/memory/thread/<thread_id>")
 def memory_thread_detail(thread_id):
-    """Return individual messages for a thread."""
     if not re.match(r'^\w+$', thread_id):
         return jsonify({'error': 'Invalid thread_id'}), 400
 
@@ -338,7 +413,7 @@ def memory_thread_detail(thread_id):
                     if obj.get('thread_id') != thread_id:
                         continue
                     if obj.get('output', '').startswith('Thread: '):
-                        continue  # skip window chunks
+                        continue
 
                     output = obj.get('output', '')
                     nl = output.find('\n')

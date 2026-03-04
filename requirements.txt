@@ -4,4 +4,5 @@ openai
 scikit-learn
 gTTS
 elevenlabs
+bcrypt
 pytest

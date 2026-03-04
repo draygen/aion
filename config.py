@@ -14,6 +14,9 @@ CONFIG = {
     "elevenlabs_api_key": "sk_00658e431b1b66afac03c4804613864e82dfd15c7e1e2499",
     "elevenlabs_voice_id": "pNInz6obpgDQGcFmaJgB",  # "Adam" - deep male voice (default)
     "admin_key": "draygen2026",  # Secret key to access /logs
+    "admin_password": "changeme2026",  # Brian's initial login password
+    "auto_extract_facts": True,        # Auto-extract facts from conversations
+    "shared_facts_file": "data/shared_learned.jsonl",  # Shared learned facts (all users)
     "TTS_ENABLED": False,  # Text-to-speech output
     "VOICE_MODE": False,   # Voice input mode (uses Whisper STT)
     "whisper_model": "base",  # Whisper model: tiny, base, small, medium, large-v3

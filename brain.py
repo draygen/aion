@@ -11,8 +11,8 @@ memory: List[Dict[str, Any]] = []
 _tfidf_vectorizer = None
 _tfidf_matrix = None
 
-# Persistent user-learned facts
-_LEARNED_PATH = "data/user_learned.jsonl"
+# Persistent learned facts (shared across all users)
+_LEARNED_PATH = CONFIG.get("shared_facts_file", "data/shared_learned.jsonl")
 
 def load_facts(files: List[str] = None) -> int:
     """Load facts into memory. Returns count loaded.
