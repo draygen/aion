@@ -9,11 +9,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-INBOX = Path("/mnt/c/jennfb/your_facebook_activity/messages/inbox")
+INBOX = Path("/mnt/c/jennfb_new/your_facebook_activity/messages/inbox")
 OUT   = Path("data/jenn_messages.jsonl")
-JENN  = {"jennifer frotten", "jennifer wallace", "jennifer frotten wallace"}
-WINDOW = 5   # messages per chunk
-STEP   = 3   # overlap step
+JENN       = {"jennifer frotten", "jennifer wallace", "jennifer frotten wallace"}
+DEATH_DATE = 1454371200000  # 2016-02-02 UTC (Jenn passed away)
+WINDOW     = 5   # messages per chunk
+STEP       = 3   # overlap step
 
 
 def fix_encoding(text: str) -> str:
@@ -103,11 +104,18 @@ def make_records(thread_dir: Path) -> list[dict]:
         date_str = fmt_date_only(ts_start)
 
         # Build output block
+        any_post_death = any(m.get("timestamp_ms", 0) > DEATH_DATE for m in chunk)
         lines = [f"Thread: {jenn_name} ↔ {thread_label}"]
         lines.append(f"Participants: {', '.join(participants)}")
+        if any_post_death:
+            lines.append("NOTE: Some messages below were sent after Jennifer passed away (2016-02-02)")
         lines.append("")
         for msg in chunk:
-            lines.append(msg_line(msg))
+            ts_msg = msg.get("timestamp_ms", 0)
+            line = msg_line(msg)
+            if ts_msg > DEATH_DATE:
+                line += "  [post-death]"
+            lines.append(line)
         output_block = "\n".join(lines)
 
         # Build searchable input key
@@ -136,15 +144,25 @@ def make_records(thread_dir: Path) -> list[dict]:
         if not content.strip():
             continue
 
+        # Determine recipient: if sender is Jenn → other person(s); otherwise → Jenn
+        if sender.lower() in JENN:
+            recipient = thread_label
+        else:
+            recipient = jenn_name
+
+        post_death = ts > DEATH_DATE
+        pd_note    = " [sent after Jennifer passed away 2016-02-02]" if post_death else ""
+
         records.append({
-            "input":        f"{sender} said to {thread_label} on {fmt_date_only(ts)}",
-            "output":       f"[{fmt_ts(ts)}] From: {sender} → To: {thread_label}\n\"{content}\"",
+            "input":        f"{sender} said to {recipient} on {fmt_date_only(ts)}{' (post-death message)' if post_death else ''}",
+            "output":       f"[{fmt_ts(ts)}] From: {sender} → To: {recipient}{pd_note}\n\"{content}\"",
             "thread":       thread_label,
             "thread_id":    thread_id,
             "participants": participants,
             "date":         fmt_date_only(ts),
             "ts_start":     ts,
             "ts_end":       ts,
+            "post_death":   post_death,
         })
 
     return records
