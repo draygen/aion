@@ -31,4 +31,6 @@ rsync -az \
 echo "==> Restarting Jarvis..."
 $SSH $HOST "pkill -f gunicorn || true; sleep 1; cd /workspace/jarvis && nohup gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 web:app > /var/log/jarvis.log 2>&1 &; sleep 3; curl -s http://localhost:5000/ | grep -o '<title>[^<]*</title>'"
 
-echo "==> Done. http://192.165.134.28:12557"
+echo "==> Done."
+echo "    Local:  http://192.165.134.28:12557"
+echo "    Public: https://drayhub.org"
