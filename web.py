@@ -2,17 +2,24 @@
 import base64
 import io
 import re
+import secrets
 import subprocess
 from collections import deque
 from datetime import datetime
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, make_response
+from gtts import gTTS
 
 from brain import get_facts
 from config import CONFIG
-from llm import ask_llm
+from llm import ask_llm_chat
 
 app = Flask(__name__)
+
+# Per-session conversation history: session_id -> deque of {role, content} dicts
+# Keep last 20 turns per session to stay within context limits
+_sessions: dict = {}
+_SESSION_TURNS = 20
 
 # Store recent chat logs (max 100 entries)
 chat_logs = deque(maxlen=100)
@@ -86,25 +93,27 @@ def handle_network_command(message: str, client_ip: str) -> str | None:
     return None
 
 
-def build_web_prompt(user_text: str) -> str:
-    """Build prompt for web visitors (not necessarily Brian)."""
-    facts = get_facts(user_text, k=12)
-    ctx_header = (
-        "You are JARVIS, an AI assistant created by Brian (aka draygen).\n"
-        "You're now publicly accessible, so you may be talking to Brian OR a visitor.\n"
-        "If someone introduces themselves, remember their name for the conversation.\n"
-        "If unsure who you're talking to, just be friendly - don't assume it's Brian.\n"
-        "Style: informal, witty, direct, sometimes sarcastic but always friendly.\n"
-        "Answer concisely (1-4 sentences).\n"
-        "You can chat about anything. For questions about Brian, use the context if relevant.\n\n"
+def build_system_prompt(user_text: str) -> str:
+    """Build the system prompt, injecting relevant facts as context."""
+    facts = get_facts(user_text, k=15)
+    system = (
+        "You are JARVIS, an AI assistant created by Brian Wallace (aka draygen).\n"
+        "You are talking to Brian unless someone explicitly introduces themselves as someone else.\n"
+        "Brian's wife is Jennifer (Jenn) Frotten Wallace.\n"
+        "Style: informal, witty, direct, occasionally sarcastic but always loyal to Brian.\n"
+        "Keep answers concise unless Brian asks for detail.\n\n"
+        "CRITICAL RULES — treat these as hard constraints:\n"
+        "1. For questions about real messages, conversations, or events: ONLY quote or reference "
+        "content that appears VERBATIM in the Memory section below. Do NOT paraphrase or reconstruct.\n"
+        "2. If Memory does not contain the answer, say: \"I don't have that in my memory.\"\n"
+        "3. NEVER invent messages, dates, names, relationships, or events. Not even plausible ones.\n"
+        "4. When showing messages, always include From:, To:, and Date: from the Memory entry.\n"
+        "5. For general knowledge questions (not about Brian or real people), answer normally.\n"
     )
     if facts:
-        joined = "\n- ".join(facts)
-        context_block = f"Context about Brian (use if relevant):\n- {joined}\n\n"
-    else:
-        context_block = ""
-
-    return f"{ctx_header}{context_block}User: {user_text}\nAssistant:"
+        joined = "\n---\n".join(facts)
+        system += f"\nMemory (ONLY reference content that appears here):\n---\n{joined}\n---\n"
+    return system
 
 
 def generate_tts_elevenlabs(text: str) -> str:
@@ -164,20 +173,37 @@ def chat():
     if not user_message:
         return jsonify({"error": "Empty message"}), 400
 
+    # Get or create session ID
+    session_id = request.cookies.get("jarvis_session")
+    if not session_id or session_id not in _sessions:
+        session_id = secrets.token_hex(16)
+        _sessions[session_id] = deque(maxlen=_SESSION_TURNS * 2)
+
+    history = _sessions[session_id]
+
     try:
         # Get client IP
         client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
         if "," in client_ip:
             client_ip = client_ip.split(",")[0].strip()
 
-        # Check for network commands first
+        # Check for network commands first (bypass LLM)
         network_response = handle_network_command(user_message, client_ip)
         if network_response:
             response = network_response
         else:
-            prompt = build_web_prompt(user_message)
-            response = ask_llm(prompt)
+            # Build messages: system prompt (with fresh facts) + conversation history + new user message
+            system_prompt = build_system_prompt(user_message)
+            messages = [{"role": "system", "content": system_prompt}]
+            messages.extend(list(history))
+            messages.append({"role": "user", "content": user_message})
+
+            response = ask_llm_chat(messages)
             response = response.strip() or "(no response)"
+
+            # Store turns in history
+            history.append({"role": "user", "content": user_message})
+            history.append({"role": "assistant", "content": response})
 
         # Log the interaction
         log_chat(client_ip, user_message, response)
@@ -192,7 +218,9 @@ def chat():
             except Exception:
                 pass  # TTS failure shouldn't break the response
 
-        return jsonify(result)
+        resp = make_response(jsonify(result))
+        resp.set_cookie("jarvis_session", session_id, max_age=86400, samesite="Lax")
+        return resp
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
