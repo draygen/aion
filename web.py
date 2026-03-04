@@ -8,6 +8,7 @@ from collections import deque
 from datetime import datetime
 
 from flask import Flask, render_template, request, jsonify, make_response
+from flask_cors import CORS
 from gtts import gTTS
 
 from brain import get_facts
@@ -15,6 +16,7 @@ from config import CONFIG
 from llm import ask_llm_chat
 
 app = Flask(__name__)
+CORS(app, origins="*")  # Allow Electron (file://) and web clients
 
 # Per-session conversation history: session_id -> deque of {role, content} dicts
 # Keep last 20 turns per session to stay within context limits
