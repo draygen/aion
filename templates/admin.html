@@ -360,6 +360,36 @@
             margin-top: 0.75rem;
         }
 
+        .tool-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+            margin-top: 0.75rem;
+        }
+
+        .tool-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.3rem 0.55rem;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            border: 1px solid #355070;
+            color: #9fb7d1;
+        }
+
+        .tool-badge.ok {
+            border-color: #2e7d32;
+            color: #7bd389;
+        }
+
+        .preset-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
         #ops-output {
             white-space: pre-wrap;
             background: #10182d;
@@ -465,12 +495,22 @@
                     <div class="ops-actions">
                         <button class="btn btn-primary" id="ops-save-btn" onclick="saveOpsConfig()">Save Targets</button>
                     </div>
+                    <div class="tool-badges" id="ops-tool-badges"></div>
                     <div class="ops-note">Changes here are runtime-only until you persist them into your remote config.</div>
                 </div>
                 <div class="ops-card">
                     <h3>Run Authorized Check</h3>
-                    <p>Examples: <code>ping api.example.com</code>, <code>dig example.com txt</code>, <code>scan app.example.com</code>, <code>ping sweep 10.0.0.0/24</code>.</p>
+                    <p>Examples: <code>scan http://app.example.com</code>, <code>httpx app.example.com</code>, <code>whatweb https://app.example.com</code>, <code>nikto https://app.example.com</code>.</p>
                     <input id="ops-command" type="text" placeholder="ping api.example.com">
+                    <div class="preset-grid">
+                        <button class="btn btn-ghost" onclick="setOpsCommand('scan http://183.89.209.74:56635')">Web Scan Self</button>
+                        <button class="btn btn-ghost" onclick="setOpsCommand('httpx http://183.89.209.74:56635')">httpx Self</button>
+                        <button class="btn btn-ghost" onclick="setOpsCommand('whatweb http://183.89.209.74:56635')">WhatWeb Self</button>
+                        <button class="btn btn-ghost" onclick="setOpsCommand('nikto http://183.89.209.74:56635')">Nikto Self</button>
+                        <button class="btn btn-ghost" onclick="setOpsCommand('testssl 183.89.209.74')">TLS Self</button>
+                        <button class="btn btn-ghost" onclick="setOpsCommand('zap http://183.89.209.74:56635')">ZAP Baseline Self</button>
+                        <button class="btn btn-ghost" onclick="setOpsCommand('ffuf http://183.89.209.74:56635')">ffuf Self</button>
+                    </div>
                     <div class="ops-actions">
                         <button class="btn btn-primary" id="ops-run-btn" onclick="runOpsCommand()">Run</button>
                     </div>
@@ -579,9 +619,24 @@
             if (!r.ok) throw new Error(d.error || 'Failed to load ops config');
             opsConfig = d;
             document.getElementById('ops-targets').value = (d.authorized_network_targets || []).join('\n');
+            renderToolBadges(d.available_tools || []);
         } catch (e) {
             document.getElementById('ops-output').textContent = 'Failed to load ops config: ' + e.message;
         }
+    }
+
+    function renderToolBadges(tools) {
+        const el = document.getElementById('ops-tool-badges');
+        el.innerHTML = (tools || []).map(tool => `
+            <span class="tool-badge ${tool.installed ? 'ok' : ''}">
+                <span>${tool.label}</span>
+                <span>${tool.installed ? 'ready' : 'missing'}</span>
+            </span>
+        `).join('');
+    }
+
+    function setOpsCommand(value) {
+        document.getElementById('ops-command').value = value;
     }
 
     async function saveOpsConfig() {
@@ -601,6 +656,7 @@
             const d = await r.json();
             if (!r.ok || !d.ok) throw new Error(d.error || 'Save failed');
             opsConfig = d;
+            renderToolBadges(d.available_tools || []);
             toast('Authorized targets updated', 'ok');
         } catch (e) {
             toast('Save failed: ' + e.message, 'err');

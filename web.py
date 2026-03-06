@@ -21,7 +21,7 @@ from brain import get_facts, add_fact
 from config import CONFIG
 from extractor import extract_and_save
 from llm import ask_llm_chat
-from tools import handle_ops_command, is_authorized_target
+from tools import available_tool_status, handle_ops_command, is_authorized_target
 
 app = Flask(__name__)
 CORS(app, origins=CONFIG.get("cors_origins"), supports_credentials=True)
@@ -248,6 +248,7 @@ def api_admin_network_config():
     return jsonify({
         "network_ops_enabled": bool(CONFIG.get("network_ops_enabled", True)),
         "authorized_network_targets": list(CONFIG.get("authorized_network_targets") or []),
+        "available_tools": available_tool_status(),
     })
 
 
@@ -274,6 +275,7 @@ def api_admin_network_config_update():
         "ok": True,
         "authorized_network_targets": list(CONFIG["authorized_network_targets"]),
         "network_ops_enabled": bool(CONFIG.get("network_ops_enabled", True)),
+        "available_tools": available_tool_status(),
     })
 
 
