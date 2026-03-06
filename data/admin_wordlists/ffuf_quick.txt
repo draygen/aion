@@ -1,0 +1,16 @@
+admin
+api
+assets
+config
+dashboard
+debug
+health
+index
+js
+login
+logout
+robots.txt
+static
+status
+uploads
+users
