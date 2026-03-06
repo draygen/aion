@@ -1,9 +1,10 @@
 import unittest
-import os
 import json
-from unittest.mock import patch, mock_open, MagicMock
+import os
+from unittest.mock import patch, MagicMock
 from io import StringIO
 
+import brain
 from brain import load_facts, add_fact, get_facts, memory, _format_snippet
 from config import CONFIG
 
@@ -20,6 +21,12 @@ class TestBrain(unittest.TestCase):
         ]
         CONFIG["retrieval"] = "embed"
         CONFIG["embed_backend"] = "tfidf"
+        CONFIG["load_pending_facts"] = False
+        CONFIG["primary_user"] = "brian"
+        CONFIG["shared_fact_files"] = []
+        CONFIG["user_fact_files"] = {"brian": list(CONFIG["facts_files"])}
+        CONFIG["legacy_shared_fact_owner"] = "brian"
+        CONFIG["user_memory_dir"] = "data/users"
 
     @patch("brain.os.path.exists")
     def test_load_facts_empty_files(self, mock_exists):
@@ -43,6 +50,7 @@ class TestBrain(unittest.TestCase):
         self.assertEqual(len(memory), 2)
         self.assertEqual(memory[0]["input"], "q1")
         self.assertEqual(memory[0]["output"], "a1")
+        self.assertEqual(memory[0]["_meta"]["source_type"], "imported_fact")
         self.assertNotIn("input", memory[1])
         self.assertEqual(memory[1]["output"], "t1")
 
@@ -63,11 +71,28 @@ class TestBrain(unittest.TestCase):
     @patch("brain._append_jsonl")
     def test_add_fact(self, mock_append_jsonl):
         initial_memory_len = len(memory)
-        add_fact("new question", "new answer")
+        add_fact("new question", "new answer", user_scope="brian")
         self.assertEqual(len(memory), initial_memory_len + 1)
         self.assertEqual(memory[0]["input"], "new question")
         self.assertEqual(memory[0]["output"], "new answer")
+        self.assertEqual(memory[0]["_meta"]["source_type"], "manual_learned")
         mock_append_jsonl.assert_called_once()
+
+    @patch("brain._append_jsonl")
+    def test_add_fact_for_non_primary_user_does_not_pollute_global_memory(self, mock_append_jsonl):
+        add_fact("favorite color", "green", user_scope="alice")
+        self.assertEqual(len(memory), 0)
+        self.assertEqual(mock_append_jsonl.call_args.args[0], os.path.join("data/users", "alice", "learned.jsonl"))
+        self.assertEqual(mock_append_jsonl.call_args.args[1]["_meta"]["owner"], "alice")
+
+    @patch("brain._append_jsonl")
+    def test_add_pending_fact_does_not_enter_active_memory(self, mock_append_jsonl):
+        result = add_fact(None, "untrusted extraction", destination="pending")
+        self.assertEqual(result, "Saved for review.")
+        self.assertEqual(len(memory), 0)
+        pending_fact = mock_append_jsonl.call_args.args[1]
+        self.assertEqual(pending_fact["_meta"]["status"], "pending")
+        self.assertFalse(pending_fact["_meta"]["trusted"])
 
     def test_format_snippet(self):
         # Test that _format_snippet replaces newlines with spaces
@@ -122,6 +147,30 @@ class TestBrain(unittest.TestCase):
                     mock_ensure_tfidf.assert_called_once()
                     # Should return top 2 by score (indices 0 and 2)
                     self.assertEqual(len(facts), 2)
+
+    @patch("brain.os.path.exists")
+    @patch("builtins.open")
+    def test_load_facts_skips_pending_by_default(self, mock_file, mock_exists):
+        mock_exists.return_value = True
+        file_content = json.dumps({
+            "output": "candidate fact",
+            "_meta": {"status": "pending", "source_type": "llm_extracted_pending", "trusted": False}
+        }) + "\n"
+        mock_file.return_value.__enter__.return_value = StringIO(file_content)
+
+        count = load_facts(files=["data/pending_learned.jsonl"])
+        self.assertEqual(count, 0)
+        self.assertEqual(len(memory), 0)
+
+    @patch("brain._load_fact_records")
+    def test_get_facts_uses_scoped_pool_for_non_primary_user(self, mock_load_fact_records):
+        mock_load_fact_records.return_value = [
+            {"input": "favorite color", "output": "green"},
+            {"input": "pet", "output": "cat"},
+        ]
+        facts = get_facts("green", user_scope="alice", k=2)
+        self.assertEqual(facts, ["Q: favorite color A: green"])
+        mock_load_fact_records.assert_called_once_with(brain._default_files_for_user("alice"))
 
 if __name__ == '__main__':
     unittest.main()

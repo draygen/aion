@@ -11,6 +11,8 @@ from flask import g, jsonify, request
 from config import CONFIG
 
 DB_PATH = "data/jarvis.db"
+MIN_PASSWORD_LENGTH = 10
+PASSWORD_CHANGE_ALLOWED_PATHS = {"/api/change-password", "/api/whoami", "/api/logout"}
 
 
 def get_db():
@@ -28,6 +30,7 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             pw_hash  TEXT NOT NULL,
             role     TEXT NOT NULL DEFAULT 'user',
+            must_change_password INTEGER NOT NULL DEFAULT 0,
             created  TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS tokens (
@@ -44,22 +47,58 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_history_user ON history(user_id, id DESC);
     """)
+    _ensure_user_column(db, "must_change_password", "INTEGER NOT NULL DEFAULT 0")
     db.commit()
 
     # Create Brian's admin account on first run
-    admin_pass = CONFIG.get("admin_password", "changeme2026")
+    admin_pass = CONFIG.get("admin_password", "")
     cur = db.execute("SELECT id FROM users WHERE username = 'brian'")
-    if not cur.fetchone():
+    existing_brian = cur.fetchone()
+    if not existing_brian:
+        if not admin_pass:
+            admin_pass = secrets.token_urlsafe(18)
+            print("[auth] No admin_password configured. Generated a one-time bootstrap password for user 'brian'.")
+            print(f"[auth] Bootstrap password: {admin_pass}")
         pw_hash = bcrypt.hashpw(admin_pass.encode(), bcrypt.gensalt()).decode()
         db.execute(
-            "INSERT INTO users (username, pw_hash, role, created) VALUES (?, ?, 'admin', ?)",
+            "INSERT INTO users (username, pw_hash, role, must_change_password, created) VALUES (?, ?, 'admin', 1, ?)",
             ("brian", pw_hash, datetime.utcnow().isoformat()),
         )
         db.commit()
         print("[auth] Created admin user: brian")
+    else:
+        db.execute("UPDATE users SET role = 'admin' WHERE username = 'brian'")
+        db.commit()
+        _mark_bootstrap_password_if_needed(db, "brian", admin_pass)
 
     db.close()
     _migrate_learned_facts()
+
+
+def _ensure_user_column(db, column_name: str, definition: str) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()}
+    if column_name not in columns:
+        db.execute(f"ALTER TABLE users ADD COLUMN {column_name} {definition}")
+
+
+def _mark_bootstrap_password_if_needed(db, username: str, configured_password: str) -> None:
+    if not configured_password:
+        return
+    row = db.execute(
+        "SELECT id, pw_hash, must_change_password FROM users WHERE username = ?",
+        (username.lower(),),
+    ).fetchone()
+    if not row or row["must_change_password"]:
+        return
+    try:
+        if bcrypt.checkpw(configured_password.encode(), row["pw_hash"].encode()):
+            db.execute(
+                "UPDATE users SET must_change_password = 1 WHERE id = ?",
+                (row["id"],),
+            )
+            db.commit()
+    except ValueError:
+        return
 
 
 def _migrate_learned_facts():
@@ -71,12 +110,28 @@ def _migrate_learned_facts():
         print(f"[auth] Migrated {old_path} → {new_path}")
 
 
-def create_user(username: str, password: str, role: str = "user") -> int:
+def _validate_new_password(password: str) -> str | None:
+    if not password:
+        return "Password is required."
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+    return None
+
+
+def create_user(
+    username: str,
+    password: str,
+    role: str = "user",
+    must_change_password: bool = True,
+) -> int:
+    err = _validate_new_password(password)
+    if err:
+        raise ValueError(err)
     pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     db = get_db()
     cur = db.execute(
-        "INSERT INTO users (username, pw_hash, role, created) VALUES (?, ?, ?, ?)",
-        (username.lower(), pw_hash, role, datetime.utcnow().isoformat()),
+        "INSERT INTO users (username, pw_hash, role, must_change_password, created) VALUES (?, ?, ?, ?, ?)",
+        (username.lower(), pw_hash, role, 1 if must_change_password else 0, datetime.utcnow().isoformat()),
     )
     db.commit()
     user_id = cur.lastrowid
@@ -108,6 +163,33 @@ def create_token(user_id: int) -> str:
     db.commit()
     db.close()
     return token
+
+
+def change_password(user_id: int, current_password: str, new_password: str) -> str | None:
+    err = _validate_new_password(new_password)
+    if err:
+        return err
+
+    db = get_db()
+    row = db.execute("SELECT pw_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row:
+        db.close()
+        return "User not found."
+    if not bcrypt.checkpw(current_password.encode(), row["pw_hash"].encode()):
+        db.close()
+        return "Current password is incorrect."
+    if bcrypt.checkpw(new_password.encode(), row["pw_hash"].encode()):
+        db.close()
+        return "New password must be different from the current password."
+
+    new_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    db.execute(
+        "UPDATE users SET pw_hash = ?, must_change_password = 0 WHERE id = ?",
+        (new_hash, user_id),
+    )
+    db.commit()
+    db.close()
+    return None
 
 
 def get_user_by_token(token: str):
@@ -157,6 +239,8 @@ def login_required(f):
         user = get_user_by_token(token)
         if not user:
             return jsonify({"error": "Unauthorized", "login_required": True}), 401
+        if user.get("must_change_password") and request.path not in PASSWORD_CHANGE_ALLOWED_PATHS:
+            return jsonify({"error": "Password change required", "requires_password_change": True}), 403
         g.user = user
         return f(*args, **kwargs)
     return decorated
@@ -171,6 +255,8 @@ def admin_required(f):
         user = get_user_by_token(token)
         if not user:
             return jsonify({"error": "Unauthorized", "login_required": True}), 401
+        if user.get("must_change_password") and request.path not in PASSWORD_CHANGE_ALLOWED_PATHS:
+            return jsonify({"error": "Password change required", "requires_password_change": True}), 403
         if user["role"] != "admin":
             return jsonify({"error": "Forbidden"}), 403
         g.user = user

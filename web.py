@@ -3,7 +3,6 @@ import base64
 import io
 import json
 import re
-import subprocess
 from collections import defaultdict, deque
 from datetime import datetime
 
@@ -16,15 +15,16 @@ import vast
 from auth import (
     init_db, login_required, admin_required,
     verify_login, create_token, delete_token,
-    create_user, delete_user, get_db, get_user_by_token,
+    create_user, delete_user, get_db, get_user_by_token, change_password,
 )
 from brain import get_facts, add_fact
 from config import CONFIG
 from extractor import extract_and_save
 from llm import ask_llm_chat
+from tools import handle_ops_command, is_authorized_target
 
 app = Flask(__name__)
-CORS(app, origins="*", supports_credentials=True)
+CORS(app, origins=CONFIG.get("cors_origins"), supports_credentials=True)
 
 # Initialize DB (creates tables + Brian's account + migrates facts)
 init_db()
@@ -45,6 +45,24 @@ _MEMORY_CATEGORIES = {
 _mem_browse_cache = None
 
 
+def _should_use_secure_cookie() -> bool:
+    if CONFIG.get("cookie_secure"):
+        return True
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "")
+    return "https" in forwarded_proto.lower()
+
+
+def _authenticate_request():
+    token = request.cookies.get("jarvis_token")
+    if not token:
+        return jsonify({"error": "Unauthorized", "login_required": True}), 401
+    user = get_user_by_token(token)
+    if not user:
+        return jsonify({"error": "Unauthorized", "login_required": True}), 401
+    g.user = user
+    return None
+
+
 def log_chat(ip: str, user_msg: str, assistant_msg: str):
     chat_logs.append({
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -54,58 +72,12 @@ def log_chat(ip: str, user_msg: str, assistant_msg: str):
     })
 
 
-def run_nslookup(target: str) -> str:
-    if not re.match(r'^[\w\.\-]+$', target):
-        return "Invalid target"
-    try:
-        result = subprocess.run(
-            ["nslookup", target],
-            capture_output=True, text=True, timeout=10
-        )
-        return result.stdout or result.stderr
-    except Exception as e:
-        return f"Error: {e}"
-
-
-def run_whois(target: str) -> str:
-    if not re.match(r'^[\w\.\-]+$', target):
-        return "Invalid target"
-    try:
-        result = subprocess.run(
-            ["whois", target],
-            capture_output=True, text=True, timeout=15
-        )
-        output = result.stdout or result.stderr
-        if len(output) > 1500:
-            output = output[:1500] + "\n... (truncated)"
-        return output
-    except Exception as e:
-        return f"Error: {e}"
-
-
 def handle_network_command(message: str, client_ip: str) -> str | None:
-    msg_lower = message.lower().strip()
-
-    if any(p in msg_lower for p in ["my ip", "my public ip", "what is my ip", "whats my ip"]):
-        return f"Your public IP address is: {client_ip}"
-
-    nslookup_match = re.match(r'(?:nslookup|dns lookup|lookup)\s+(\S+)', msg_lower)
-    if nslookup_match:
-        target = nslookup_match.group(1)
-        result = run_nslookup(target)
-        return f"NSLookup for {target}:\n```\n{result}\n```"
-
-    whois_match = re.match(r'whois\s+(\S+)', msg_lower)
-    if whois_match:
-        target = whois_match.group(1)
-        result = run_whois(target)
-        return f"WHOIS for {target}:\n```\n{result}\n```"
-
-    return None
+    return handle_ops_command(message, client_ip)
 
 
 def build_system_prompt(user_text: str, username: str = "brian") -> str:
-    facts = get_facts(user_text, k=15)
+    facts = get_facts(user_text, k=15, user_scope=username)
     if username.lower() == "brian":
         identity_line = "You are talking to Brian unless someone explicitly introduces themselves as someone else."
     else:
@@ -124,6 +96,7 @@ def build_system_prompt(user_text: str, username: str = "brian") -> str:
         "3. NEVER invent messages, dates, names, relationships, or events. Not even plausible ones.\n"
         "4. When showing messages, always include From:, To:, and Date: from the Memory entry.\n"
         "5. For general knowledge questions (not about Brian or real people), answer normally.\n"
+        "6. For infrastructure checks, only use the explicit built-in ops commands on authorized targets.\n"
     )
     if facts:
         joined = "\n---\n".join(facts)
@@ -201,9 +174,33 @@ def api_login():
     if not user:
         return jsonify({"error": "Invalid username or password"}), 401
     token = create_token(user["id"])
-    resp = make_response(jsonify({"ok": True, "username": user["username"], "role": user["role"]}))
-    resp.set_cookie("jarvis_token", token, max_age=86400 * 30, samesite="Lax", httponly=True)
+    resp = make_response(jsonify({
+        "ok": True,
+        "username": user["username"],
+        "role": user["role"],
+        "requires_password_change": bool(user.get("must_change_password")),
+    }))
+    resp.set_cookie(
+        "jarvis_token",
+        token,
+        max_age=86400 * 30,
+        samesite=CONFIG.get("cookie_samesite", "Lax"),
+        httponly=True,
+        secure=_should_use_secure_cookie(),
+    )
     return resp
+
+
+@app.route("/api/change-password", methods=["POST"])
+@login_required
+def api_change_password():
+    data = request.get_json() or {}
+    current_password = data.get("current_password", "")
+    new_password = data.get("new_password", "")
+    err = change_password(g.user["id"], current_password, new_password)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify({"ok": True})
 
 
 @app.route("/api/logout", methods=["POST"])
@@ -219,7 +216,11 @@ def api_logout():
 @app.route("/api/whoami")
 @login_required
 def api_whoami():
-    return jsonify({"username": g.user["username"], "role": g.user["role"]})
+    return jsonify({
+        "username": g.user["username"],
+        "role": g.user["role"],
+        "requires_password_change": bool(g.user.get("must_change_password")),
+    })
 
 
 @app.route("/api/admin/users", methods=["POST"])
@@ -229,15 +230,64 @@ def api_admin_create_user():
     username = data.get("username", "").strip()
     password = data.get("password", "")
     role = data.get("role", "user")
+    must_change_password = data.get("must_change_password", True)
     if not username or not password:
         return jsonify({"error": "Missing username or password"}), 400
     if role not in ("user", "admin"):
         return jsonify({"error": "Invalid role"}), 400
     try:
-        user_id = create_user(username, password, role)
-        return jsonify({"ok": True, "id": user_id, "username": username})
+        user_id = create_user(username, password, role, must_change_password=bool(must_change_password))
+        return jsonify({"ok": True, "id": user_id, "username": username, "must_change_password": bool(must_change_password)})
     except Exception as e:
         return jsonify({"error": str(e)}), 409
+
+
+@app.route("/api/admin/network/config")
+@admin_required
+def api_admin_network_config():
+    return jsonify({
+        "network_ops_enabled": bool(CONFIG.get("network_ops_enabled", True)),
+        "authorized_network_targets": list(CONFIG.get("authorized_network_targets") or []),
+    })
+
+
+@app.route("/api/admin/network/config", methods=["POST"])
+@admin_required
+def api_admin_network_config_update():
+    data = request.get_json() or {}
+    targets = data.get("authorized_network_targets")
+    if targets is None:
+        return jsonify({"error": "Missing authorized_network_targets"}), 400
+    if not isinstance(targets, list):
+        return jsonify({"error": "authorized_network_targets must be a list"}), 400
+    cleaned = []
+    for value in targets:
+        if not isinstance(value, str):
+            return jsonify({"error": "All targets must be strings"}), 400
+        item = value.strip()
+        if item:
+            cleaned.append(item)
+    CONFIG["authorized_network_targets"] = cleaned
+    if "network_ops_enabled" in data:
+        CONFIG["network_ops_enabled"] = bool(data.get("network_ops_enabled"))
+    return jsonify({
+        "ok": True,
+        "authorized_network_targets": list(CONFIG["authorized_network_targets"]),
+        "network_ops_enabled": bool(CONFIG.get("network_ops_enabled", True)),
+    })
+
+
+@app.route("/api/admin/network/run", methods=["POST"])
+@admin_required
+def api_admin_network_run():
+    data = request.get_json() or {}
+    command = (data.get("command") or "").strip()
+    if not command:
+        return jsonify({"error": "Missing command"}), 400
+    result = handle_ops_command(command, request.remote_addr or "")
+    if result is None:
+        return jsonify({"error": "Unsupported command"}), 400
+    return jsonify({"ok": True, "result": result})
 
 
 @app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
@@ -279,7 +329,7 @@ def chat():
         if user_message.lower().startswith("remember:"):
             fact_text = user_message[len("remember:"):].strip()
             if fact_text:
-                add_fact(None, fact_text)
+                add_fact(None, fact_text, user_scope=username)
                 response = f"Got it. I'll remember: {fact_text}"
                 log_chat(client_ip, user_message, response)
                 return jsonify({"response": response})
@@ -301,7 +351,7 @@ def chat():
             _save_history_turns(user_id, user_message, response)
 
             if CONFIG.get("auto_extract_facts", True):
-                extract_and_save(user_message, response, username)
+                extract_and_save(user_message, response, username, user_scope=username)
 
         log_chat(client_ip, user_message, response)
 
@@ -338,6 +388,11 @@ def api_logs():
 
 @app.route("/api/memory/browse")
 def memory_browse():
+    if CONFIG.get("memory_browser_requires_auth", True):
+        auth_error = _authenticate_request()
+        if auth_error:
+            return auth_error
+
     global _mem_browse_cache
     if _mem_browse_cache:
         return jsonify({'categories': _mem_browse_cache})
@@ -399,6 +454,11 @@ def memory_browse():
 
 @app.route("/api/memory/thread/<thread_id>")
 def memory_thread_detail(thread_id):
+    if CONFIG.get("memory_browser_requires_auth", True):
+        auth_error = _authenticate_request()
+        if auth_error:
+            return auth_error
+
     if not re.match(r'^\w+$', thread_id):
         return jsonify({'error': 'Invalid thread_id'}), 400
 
@@ -496,6 +556,18 @@ def api_vast_instances():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/admin/vast/instances/<int:instance_id>")
+@admin_required
+def api_vast_instance(instance_id):
+    try:
+        instance = vast.get_instance(instance_id)
+        return jsonify({"instance": instance})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/admin/vast/deploy", methods=["POST"])
 @admin_required
 def api_vast_deploy():
@@ -507,6 +579,42 @@ def api_vast_deploy():
     try:
         result = vast.deploy_on_offer(int(offer_id), disk_gb=disk_gb)
         return jsonify({"ok": True, "result": result})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/vast/instances/<int:instance_id>/stop", methods=["POST"])
+@admin_required
+def api_vast_stop(instance_id):
+    try:
+        result = vast.stop_instance(instance_id)
+        return jsonify({"ok": True, "result": result})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/vast/instances/<int:instance_id>/start", methods=["POST"])
+@admin_required
+def api_vast_start(instance_id):
+    try:
+        result = vast.start_instance(instance_id)
+        return jsonify({"ok": True, "result": result})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/vast/instances/<int:instance_id>/restart", methods=["POST"])
+@admin_required
+def api_vast_restart(instance_id):
+    try:
+        result = vast.restart_instance(instance_id)
+        return jsonify(result)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:

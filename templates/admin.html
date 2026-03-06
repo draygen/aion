@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jarvis — Admin</title>
+    <title>Jarvis Admin</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background: #1a1a2e;
             color: #eee;
             min-height: 100vh;
@@ -36,9 +36,10 @@
             align-items: center;
             gap: 0.4rem;
         }
+
         .dot { width: 8px; height: 8px; border-radius: 50%; background: #888; }
         .dot.green { background: #4caf50; }
-        .dot.red   { background: #f44336; }
+        .dot.red { background: #f44336; }
 
         .btn {
             padding: 0.45rem 1rem;
@@ -49,11 +50,13 @@
             font-weight: 600;
             transition: all 0.15s;
         }
+
         .btn-ghost {
             background: none;
             border: 1px solid #0f3460;
             color: #aaa;
         }
+
         .btn-ghost:hover { border-color: #00d9ff; color: #00d9ff; }
         .btn-primary { background: #00d9ff; color: #1a1a2e; }
         .btn-primary:hover { background: #00b8d9; }
@@ -61,6 +64,8 @@
         .btn-danger:hover { background: #f4433622; border-color: #f44336; }
         .btn-warn { background: none; border: 1px solid #ff980044; color: #ff9800; }
         .btn-warn:hover { background: #ff980022; border-color: #ff9800; }
+        .btn-ok { background: none; border: 1px solid #4caf5044; color: #4caf50; }
+        .btn-ok:hover { background: #4caf5022; border-color: #4caf50; }
         .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
         main { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
@@ -76,14 +81,14 @@
             align-items: center;
             gap: 0.75rem;
         }
+
         .section-title::after {
-            content: '';
+            content: "";
             flex: 1;
             height: 1px;
             background: #0f3460;
         }
 
-        /* Instances */
         .instance-grid { display: flex; flex-direction: column; gap: 0.75rem; }
 
         .instance-card {
@@ -92,10 +97,11 @@
             border-radius: 0.75rem;
             padding: 1rem 1.25rem;
         }
-        .instance-card.running  { border-left: 3px solid #4caf50; }
-        .instance-card.loading  { border-left: 3px solid #ff9800; }
-        .instance-card.exited   { border-left: 3px solid #f44336; }
-        .instance-card.offline  { border-left: 3px solid #666; }
+
+        .instance-card.running { border-left: 3px solid #4caf50; }
+        .instance-card.loading { border-left: 3px solid #ff9800; }
+        .instance-card.exited { border-left: 3px solid #f44336; }
+        .instance-card.offline { border-left: 3px solid #666; }
 
         .inst-top {
             display: flex;
@@ -104,6 +110,7 @@
             gap: 1rem;
             margin-bottom: 0.6rem;
         }
+
         .inst-id { font-size: 0.78rem; color: #888; }
         .inst-gpu { font-size: 1rem; font-weight: 600; color: #eee; }
         .inst-price { font-size: 1rem; color: #00d9ff; font-weight: 600; white-space: nowrap; }
@@ -116,7 +123,9 @@
             color: #888;
             margin-bottom: 0.75rem;
         }
+
         .inst-meta span { display: flex; align-items: center; gap: 0.3rem; }
+
         .inst-status-badge {
             display: inline-flex;
             align-items: center;
@@ -126,23 +135,14 @@
             border-radius: 2rem;
             background: #0f3460;
         }
+
         .inst-status-badge.running { color: #4caf50; }
         .inst-status-badge.loading { color: #ff9800; }
-        .inst-status-badge.exited  { color: #f44336; }
+        .inst-status-badge.exited { color: #f44336; }
+        .inst-status-badge.stopped { color: #f44336; }
 
         .inst-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
-        .empty-state {
-            text-align: center;
-            padding: 2rem;
-            color: #555;
-            font-size: 0.9rem;
-            background: #16213e22;
-            border: 1px dashed #0f3460;
-            border-radius: 0.75rem;
-        }
-
-        /* Search filters */
         .filters {
             display: flex;
             gap: 0.75rem;
@@ -154,8 +154,10 @@
             border-radius: 0.75rem;
             border: 1px solid #0f3460;
         }
+
         .filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
         .filter-group label { font-size: 0.72rem; color: #888; letter-spacing: 0.05em; }
+
         .filter-group input {
             padding: 0.45rem 0.75rem;
             background: #1a1a2e;
@@ -166,15 +168,17 @@
             width: 120px;
             outline: none;
         }
+
         .filter-group input:focus { border-color: #00d9ff; }
 
-        /* Offers table */
         .offers-wrap { overflow-x: auto; }
+
         table {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85rem;
         }
+
         thead th {
             text-align: left;
             padding: 0.6rem 0.75rem;
@@ -185,6 +189,7 @@
             text-transform: uppercase;
             white-space: nowrap;
         }
+
         tbody tr { border-bottom: 1px solid #0f346022; transition: background 0.1s; }
         tbody tr:last-child { border-bottom: none; }
         tbody tr:hover { background: #16213e; }
@@ -194,17 +199,25 @@
         .price-cell { color: #00d9ff; font-weight: 700; white-space: nowrap; }
         .rel-cell { font-size: 0.8rem; }
         .rel-high { color: #4caf50; }
-        .rel-med  { color: #ff9800; }
-        .rel-low  { color: #f44336; }
+        .rel-med { color: #ff9800; }
+        .rel-low { color: #f44336; }
 
-        #offers-loading, #offers-empty {
+        .empty-state,
+        #offers-loading,
+        #offers-empty,
+        #ops-output-empty {
             text-align: center;
             padding: 2rem;
             color: #555;
             font-size: 0.9rem;
         }
 
-        /* Deploy modal */
+        .empty-state {
+            background: #16213e22;
+            border: 1px dashed #0f3460;
+            border-radius: 0.75rem;
+        }
+
         #modal-overlay {
             display: none;
             position: fixed;
@@ -214,7 +227,9 @@
             align-items: center;
             justify-content: center;
         }
+
         #modal-overlay.open { display: flex; }
+
         #modal-box {
             background: #16213e;
             border: 1px solid #0f3460;
@@ -223,7 +238,9 @@
             width: 380px;
             max-width: 95vw;
         }
+
         #modal-box h3 { color: #00d9ff; margin-bottom: 1rem; font-size: 1.1rem; }
+
         #modal-details {
             background: #1a1a2e;
             border-radius: 0.5rem;
@@ -233,9 +250,11 @@
             margin-bottom: 1rem;
             color: #ccc;
         }
+
         .modal-field { display: flex; justify-content: space-between; }
         .modal-field span:first-child { color: #888; }
-        .modal-field span:last-child  { color: #eee; font-weight: 600; }
+        .modal-field span:last-child { color: #eee; font-weight: 600; }
+
         #modal-disk-label { font-size: 0.78rem; color: #888; margin-bottom: 0.3rem; display: block; }
         #modal-disk {
             width: 100%;
@@ -248,13 +267,13 @@
             margin-bottom: 1rem;
             outline: none;
         }
+
         #modal-disk:focus { border-color: #00d9ff; }
         .modal-actions { display: flex; gap: 0.5rem; }
         #modal-result { font-size: 0.82rem; margin-top: 0.75rem; }
-        #modal-result.ok  { color: #4caf50; }
+        #modal-result.ok { color: #4caf50; }
         #modal-result.err { color: #f44336; }
 
-        /* Toast */
         #toast {
             position: fixed;
             bottom: 1.5rem;
@@ -272,38 +291,124 @@
             z-index: 200;
             max-width: 320px;
         }
+
         #toast.show { opacity: 1; transform: translateY(0); }
-        #toast.ok  { border-color: #4caf5066; color: #4caf50; }
+        #toast.ok { border-color: #4caf5066; color: #4caf50; }
         #toast.err { border-color: #f4433666; color: #f44336; }
+
+        .ops-panel {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            display: grid;
+            gap: 1rem;
+        }
+
+        .ops-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 1rem;
+        }
+
+        .ops-card {
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-radius: 0.6rem;
+            padding: 1rem;
+        }
+
+        .ops-card h3 {
+            color: #00d9ff;
+            margin-bottom: 0.75rem;
+            font-size: 0.95rem;
+        }
+
+        .ops-card p {
+            color: #8da7c4;
+            font-size: 0.82rem;
+            line-height: 1.5;
+            margin-bottom: 0.75rem;
+        }
+
+        .ops-card textarea,
+        .ops-card input {
+            width: 100%;
+            padding: 0.65rem 0.75rem;
+            background: #10182d;
+            border: 1px solid #0f3460;
+            border-radius: 0.45rem;
+            color: #eee;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .ops-card textarea {
+            min-height: 140px;
+            resize: vertical;
+        }
+
+        .ops-card textarea:focus,
+        .ops-card input:focus {
+            border-color: #00d9ff;
+        }
+
+        .ops-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 0.75rem;
+        }
+
+        #ops-output {
+            white-space: pre-wrap;
+            background: #10182d;
+            border: 1px solid #0f3460;
+            border-radius: 0.6rem;
+            padding: 1rem;
+            min-height: 220px;
+            font-size: 0.82rem;
+            line-height: 1.45;
+            color: #d7e6f7;
+            overflow-x: auto;
+        }
+
+        .ops-note {
+            font-size: 0.78rem;
+            color: #7088a0;
+        }
+
+        @media (max-width: 900px) {
+            .ops-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
 
 <header>
-    <h1>⚡ JARVIS ADMIN</h1>
+    <h1>JARVIS ADMIN</h1>
     <div class="header-right">
         <div class="api-status">
             <div class="dot" id="api-dot"></div>
-            <span id="api-status-text">Checking…</span>
+            <span id="api-status-text">Checking...</span>
         </div>
-        <button class="btn btn-ghost" onclick="refreshAll()">↻ Refresh</button>
+        <button class="btn btn-ghost" onclick="refreshAll()">Refresh</button>
         <a href="/" style="text-decoration:none">
-            <button class="btn btn-ghost">← Chat</button>
+            <button class="btn btn-ghost">Chat</button>
         </a>
     </div>
 </header>
 
 <main>
-
-    <!-- Running Instances -->
     <section>
-        <div class="section-title">Running Instances</div>
+        <div class="section-title">Instances</div>
         <div class="instance-grid" id="instances-list">
-            <div class="empty-state">Loading…</div>
+            <div class="empty-state">Loading...</div>
         </div>
     </section>
 
-    <!-- Find GPU Servers -->
     <section>
         <div class="section-title">Find GPU Servers</div>
 
@@ -317,17 +422,17 @@
                 <input type="number" id="f-min-vram" placeholder="e.g. 16" step="1" min="0">
             </div>
             <div class="filter-group">
-                <label>GPU Name (optional)</label>
+                <label>GPU Name</label>
                 <input type="text" id="f-gpu-name" placeholder="e.g. RTX_4090" style="width:160px">
             </div>
             <div class="filter-group" style="justify-content:flex-end">
                 <label>&nbsp;</label>
-                <button class="btn btn-primary" id="search-btn" onclick="searchOffers()">🔍 Search</button>
+                <button class="btn btn-primary" id="search-btn" onclick="searchOffers()">Search</button>
             </div>
         </div>
 
         <div class="offers-wrap">
-            <div id="offers-loading" style="display:none">Loading offers…</div>
+            <div id="offers-loading" style="display:none">Loading offers...</div>
             <div id="offers-empty" style="display:none">No offers found. Try relaxing the filters.</div>
             <table id="offers-table" style="display:none">
                 <thead>
@@ -338,7 +443,7 @@
                         <th>Count</th>
                         <th>System RAM</th>
                         <th>Disk</th>
-                        <th>Net (↑↓ Mbps)</th>
+                        <th>Net (up/down Mbps)</th>
                         <th>Reliability</th>
                         <th>$/hr</th>
                         <th></th>
@@ -349,9 +454,36 @@
         </div>
     </section>
 
+    <section>
+        <div class="section-title">Ops Tools</div>
+        <div class="ops-panel">
+            <div class="ops-grid">
+                <div class="ops-card">
+                    <h3>Authorized Targets</h3>
+                    <p>One host, wildcard, IP, or CIDR per line. Jarvis will only run network checks against these values.</p>
+                    <textarea id="ops-targets" placeholder="example.com&#10;*.example.com&#10;203.0.113.10&#10;10.0.0.0/24"></textarea>
+                    <div class="ops-actions">
+                        <button class="btn btn-primary" id="ops-save-btn" onclick="saveOpsConfig()">Save Targets</button>
+                    </div>
+                    <div class="ops-note">Changes here are runtime-only until you persist them into your remote config.</div>
+                </div>
+                <div class="ops-card">
+                    <h3>Run Authorized Check</h3>
+                    <p>Examples: <code>ping api.example.com</code>, <code>dig example.com txt</code>, <code>scan app.example.com</code>, <code>ping sweep 10.0.0.0/24</code>.</p>
+                    <input id="ops-command" type="text" placeholder="ping api.example.com">
+                    <div class="ops-actions">
+                        <button class="btn btn-primary" id="ops-run-btn" onclick="runOpsCommand()">Run</button>
+                    </div>
+                </div>
+            </div>
+            <div class="ops-card">
+                <h3>Output</h3>
+                <div id="ops-output">No command run yet.</div>
+            </div>
+        </div>
+    </section>
 </main>
 
-<!-- Deploy modal -->
 <div id="modal-overlay">
     <div id="modal-box">
         <h3>Deploy Jarvis</h3>
@@ -359,7 +491,7 @@
         <label id="modal-disk-label" for="modal-disk">Disk (GB)</label>
         <input type="number" id="modal-disk" value="40" min="16" max="500">
         <div class="modal-actions">
-            <button class="btn btn-primary" id="modal-confirm-btn" onclick="confirmDeploy()">🚀 Deploy</button>
+            <button class="btn btn-primary" id="modal-confirm-btn" onclick="confirmDeploy()">Deploy</button>
             <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
         </div>
         <div id="modal-result"></div>
@@ -370,20 +502,21 @@
 
 <script>
     let pendingOffer = null;
+    let opsConfig = null;
 
-    // ── Utilities ───────────────────────────────────────────────────────────
-    function fmt(v, unit='') { return v != null ? `${v}${unit}` : '—'; }
-    function fmtGb(mb) { return mb ? `${(mb/1024).toFixed(0)} GB` : '—'; }
+    function fmt(v, unit='') { return v != null ? `${v}${unit}` : '-'; }
+    function fmtGb(mb) { return mb ? `${(mb / 1024).toFixed(0)} GB` : '-'; }
     function fmtRel(r) {
-        if (r == null) return '—';
+        if (r == null) return '-';
         const pct = (r * 100).toFixed(1) + '%';
-        return r >= 0.99 ? `<span class="rel-cell rel-high">${pct}</span>`
-             : r >= 0.95 ? `<span class="rel-cell rel-med">${pct}</span>`
-                         : `<span class="rel-cell rel-low">${pct}</span>`;
+        if (r >= 0.99) return `<span class="rel-cell rel-high">${pct}</span>`;
+        if (r >= 0.95) return `<span class="rel-cell rel-med">${pct}</span>`;
+        return `<span class="rel-cell rel-low">${pct}</span>`;
     }
     function fmtUptime(secs) {
-        if (!secs) return '—';
-        const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+        if (!secs) return '-';
+        const h = Math.floor(secs / 3600);
+        const m = Math.floor((secs % 3600) / 60);
         return h ? `${h}h ${m}m` : `${m}m`;
     }
     function statusClass(s) {
@@ -393,7 +526,14 @@
         if (s === 'exited' || s === 'stopped') return 'exited';
         return 'loading';
     }
-
+    function canStart(inst) {
+        const s = String(inst.actual_status || inst.cur_state || '').toLowerCase();
+        return s === 'stopped' || s === 'exited';
+    }
+    function canStop(inst) {
+        const s = String(inst.actual_status || inst.cur_state || '').toLowerCase();
+        return s === 'running';
+    }
     function toast(msg, type='ok') {
         const el = document.getElementById('toast');
         el.textContent = msg;
@@ -402,16 +542,17 @@
         el._t = setTimeout(() => el.className = '', 3500);
     }
 
-    // ── Auth check ──────────────────────────────────────────────────────────
     async function checkAdmin() {
         const r = await fetch('/api/whoami', { credentials: 'include' });
         if (!r.ok) { location.href = '/'; return false; }
         const d = await r.json();
-        if (d.role !== 'admin') { document.body.innerHTML = '<p style="padding:2rem;color:#f44336">Access denied.</p>'; return false; }
+        if (d.role !== 'admin') {
+            document.body.innerHTML = '<p style="padding:2rem;color:#f44336">Access denied.</p>';
+            return false;
+        }
         return true;
     }
 
-    // ── API status ──────────────────────────────────────────────────────────
     async function checkApiStatus() {
         const dot = document.getElementById('api-dot');
         const txt = document.getElementById('api-status-text');
@@ -425,13 +566,74 @@
                 dot.className = 'dot red';
                 txt.textContent = d.error || 'API Error';
             }
-        } catch(e) {
+        } catch (e) {
             dot.className = 'dot red';
             txt.textContent = 'Error';
         }
     }
 
-    // ── Instances ───────────────────────────────────────────────────────────
+    async function loadOpsConfig() {
+        try {
+            const r = await fetch('/api/admin/network/config', { credentials: 'include' });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.error || 'Failed to load ops config');
+            opsConfig = d;
+            document.getElementById('ops-targets').value = (d.authorized_network_targets || []).join('\n');
+        } catch (e) {
+            document.getElementById('ops-output').textContent = 'Failed to load ops config: ' + e.message;
+        }
+    }
+
+    async function saveOpsConfig() {
+        const btn = document.getElementById('ops-save-btn');
+        const targets = document.getElementById('ops-targets').value
+            .split(/\r?\n/)
+            .map(s => s.trim())
+            .filter(Boolean);
+        btn.disabled = true;
+        try {
+            const r = await fetch('/api/admin/network/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ authorized_network_targets: targets }),
+            });
+            const d = await r.json();
+            if (!r.ok || !d.ok) throw new Error(d.error || 'Save failed');
+            opsConfig = d;
+            toast('Authorized targets updated', 'ok');
+        } catch (e) {
+            toast('Save failed: ' + e.message, 'err');
+        }
+        btn.disabled = false;
+    }
+
+    async function runOpsCommand() {
+        const btn = document.getElementById('ops-run-btn');
+        const command = document.getElementById('ops-command').value.trim();
+        if (!command) {
+            toast('Enter a command first', 'err');
+            return;
+        }
+        btn.disabled = true;
+        document.getElementById('ops-output').textContent = 'Running...';
+        try {
+            const r = await fetch('/api/admin/network/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ command }),
+            });
+            const d = await r.json();
+            if (!r.ok || !d.ok) throw new Error(d.error || 'Command failed');
+            document.getElementById('ops-output').textContent = d.result || '(no output)';
+        } catch (e) {
+            document.getElementById('ops-output').textContent = 'Error: ' + e.message;
+            toast('Ops command failed: ' + e.message, 'err');
+        }
+        btn.disabled = false;
+    }
+
     async function loadInstances() {
         const container = document.getElementById('instances-list');
         try {
@@ -440,64 +642,63 @@
             if (!r.ok) throw new Error(d.error);
             const list = d.instances || [];
             if (!list.length) {
-                container.innerHTML = '<div class="empty-state">No running instances.</div>';
+                container.innerHTML = '<div class="empty-state">No instances found.</div>';
                 return;
             }
             container.innerHTML = list.map(renderInstance).join('');
-        } catch(e) {
+        } catch (e) {
             container.innerHTML = `<div class="empty-state" style="color:#f44336">Error: ${esc(e.message)}</div>`;
         }
     }
 
     function renderInstance(inst) {
         const sc = statusClass(inst.actual_status || inst.cur_state);
-        const gpu = inst.num_gpus > 1
-            ? `${inst.gpu_name} × ${inst.num_gpus}`
-            : (inst.gpu_name || 'Unknown GPU');
+        const gpu = inst.num_gpus > 1 ? `${inst.gpu_name} x ${inst.num_gpus}` : (inst.gpu_name || 'Unknown GPU');
         const vram = fmtGb(inst.gpu_totalram || inst.gpu_ram);
-        const ram  = fmtGb(inst.cpu_ram);
-        const ssh  = inst.ssh_host ? `${inst.ssh_host}:${inst.ssh_port}` : '—';
-        const web  = inst.public_ipaddr ? `http://${inst.public_ipaddr}:5000` : null;
+        const ram = fmtGb(inst.cpu_ram);
+        const ssh = inst.ssh_host ? `${inst.ssh_host}:${inst.ssh_port}` : '-';
+        const web = inst.public_ipaddr ? `http://${inst.public_ipaddr}:5000` : null;
         const uptime = fmtUptime(inst.uptime_mins ? inst.uptime_mins * 60 : null);
+        const dot = sc === 'running' ? 'green' : sc === 'exited' ? 'red' : '';
 
         return `
         <div class="instance-card ${sc}">
             <div class="inst-top">
                 <div>
-                    <div class="inst-id">#${inst.id} &nbsp;·&nbsp; <span class="inst-status-badge ${sc}">
-                        <span class="dot ${sc === 'running' ? 'green' : sc === 'exited' ? 'red' : ''}"></span>
+                    <div class="inst-id">#${inst.id} &nbsp;|&nbsp; <span class="inst-status-badge ${sc}">
+                        <span class="dot ${dot}"></span>
                         ${inst.actual_status || inst.cur_state || 'unknown'}
                     </span></div>
                     <div class="inst-gpu">${esc(gpu)} &nbsp;(${vram} VRAM)</div>
                 </div>
-                <div class="inst-price">$${(inst.dph_total||0).toFixed(3)}/hr</div>
+                <div class="inst-price">$${(inst.dph_total || 0).toFixed(3)}/hr</div>
             </div>
             <div class="inst-meta">
-                <span>💻 ${esc(inst.cpu_name||'—')} · ${inst.cpu_cores||'?'} cores · ${ram} RAM</span>
-                <span>💾 ${fmt(inst.disk_space, ' GB')} disk</span>
-                ${ssh !== '—' ? `<span>🔑 SSH: <code style="color:#00d9ff;font-size:0.78rem">root@${esc(ssh)}</code></span>` : ''}
-                ${web ? `<span>🌐 <a href="${esc(web)}" target="_blank" style="color:#00d9ff;font-size:0.8rem">${esc(web)}</a></span>` : ''}
-                ${uptime !== '—' ? `<span>⏱ Uptime: ${uptime}</span>` : ''}
+                <span>CPU ${esc(inst.cpu_name || '-')} | ${inst.cpu_cores || '?'} cores | ${ram} RAM</span>
+                <span>Disk ${fmt(inst.disk_space, ' GB')}</span>
+                ${ssh !== '-' ? `<span>SSH: <code style="color:#00d9ff;font-size:0.78rem">root@${esc(ssh)}</code></span>` : ''}
+                ${web ? `<span>Web: <a href="${esc(web)}" target="_blank" style="color:#00d9ff;font-size:0.8rem">${esc(web)}</a></span>` : ''}
+                ${uptime !== '-' ? `<span>Uptime: ${uptime}</span>` : ''}
             </div>
             <div class="inst-actions">
+                ${canStart(inst) ? `
+                <button class="btn btn-ok" onclick="startInstance(${inst.id})">Start</button>` : ''}
+                ${canStop(inst) ? `
+                <button class="btn btn-warn" onclick="stopInstance(${inst.id})">Stop</button>` : ''}
                 ${inst.ssh_host ? `
-                <button class="btn btn-warn" onclick="redeployInstance(${inst.id}, '${esc(inst.ssh_host)}', ${inst.ssh_port})">
-                    ↑ Redeploy Code
-                </button>` : ''}
-                <button class="btn btn-danger" onclick="destroyInstance(${inst.id})">
-                    🗑 Destroy
-                </button>
+                <button class="btn btn-ghost" onclick="restartInstance(${inst.id})">Restart</button>
+                <button class="btn btn-warn" onclick="redeployInstance(${inst.id}, '${esc(inst.ssh_host)}', ${inst.ssh_port})">Redeploy Code</button>` : ''}
+                <button class="btn btn-danger" onclick="destroyInstance(${inst.id})">Destroy</button>
             </div>
         </div>`;
     }
 
-    // ── Offers ──────────────────────────────────────────────────────────────
     async function searchOffers() {
         const btn = document.getElementById('search-btn');
         const loading = document.getElementById('offers-loading');
-        const empty   = document.getElementById('offers-empty');
-        const table   = document.getElementById('offers-table');
-        const body    = document.getElementById('offers-body');
+        const empty = document.getElementById('offers-empty');
+        const table = document.getElementById('offers-table');
+        const body = document.getElementById('offers-body');
 
         btn.disabled = true;
         loading.style.display = 'block';
@@ -505,10 +706,10 @@
         table.style.display = 'none';
 
         const params = new URLSearchParams();
-        const maxDph  = document.getElementById('f-max-dph').value;
+        const maxDph = document.getElementById('f-max-dph').value;
         const minVram = document.getElementById('f-min-vram').value;
         const gpuName = document.getElementById('f-gpu-name').value;
-        if (maxDph)  params.set('max_dph', maxDph);
+        if (maxDph) params.set('max_dph', maxDph);
         if (minVram) params.set('min_gpu_ram', minVram);
         if (gpuName) params.set('gpu_name', gpuName);
 
@@ -519,27 +720,31 @@
             const offers = d.offers || [];
 
             loading.style.display = 'none';
-            if (!offers.length) { empty.style.display = 'block'; btn.disabled = false; return; }
+            if (!offers.length) {
+                empty.style.display = 'block';
+                btn.disabled = false;
+                return;
+            }
 
             body.innerHTML = offers.map((o, i) => `
                 <tr>
-                    <td style="color:#555">${i+1}</td>
-                    <td class="gpu-cell">${esc(o.gpu_name||'?')}</td>
+                    <td style="color:#555">${i + 1}</td>
+                    <td class="gpu-cell">${esc(o.gpu_name || '?')}</td>
                     <td>${fmtGb(o.gpu_ram)}</td>
-                    <td style="text-align:center">${o.num_gpus||1}</td>
+                    <td style="text-align:center">${o.num_gpus || 1}</td>
                     <td>${fmtGb(o.cpu_ram)}</td>
                     <td>${fmt(o.disk_space, ' GB')}</td>
                     <td style="font-size:0.78rem;color:#888">${o.inet_up ? Math.round(o.inet_up) : '?'} / ${o.inet_down ? Math.round(o.inet_down) : '?'}</td>
                     <td>${fmtRel(o.reliability || o.reliability2)}</td>
-                    <td class="price-cell">$${(o.dph_total||0).toFixed(3)}</td>
+                    <td class="price-cell">$${(o.dph_total || 0).toFixed(3)}</td>
                     <td><button class="btn btn-primary" style="font-size:0.78rem;padding:0.35rem 0.75rem"
-                        onclick="openDeploy(${o.id}, ${JSON.stringify(esc(o.gpu_name||'?'))}, ${o.num_gpus||1}, ${(o.dph_total||0).toFixed(3)}, ${fmtGb(o.gpu_ram).replace(' GB','')})">
-                        🚀 Deploy
+                        onclick="openDeploy(${o.id}, ${JSON.stringify(esc(o.gpu_name || '?'))}, ${o.num_gpus || 1}, ${(o.dph_total || 0).toFixed(3)}, ${fmtGb(o.gpu_ram).replace(' GB','')})">
+                        Deploy
                     </button></td>
                 </tr>`).join('');
 
             table.style.display = 'table';
-        } catch(e) {
+        } catch (e) {
             loading.style.display = 'none';
             empty.style.display = 'block';
             empty.textContent = 'Error: ' + e.message;
@@ -547,15 +752,14 @@
         btn.disabled = false;
     }
 
-    // ── Deploy modal ────────────────────────────────────────────────────────
     function openDeploy(offerId, gpuName, numGpus, dph, vramGb) {
         pendingOffer = offerId;
         document.getElementById('modal-details').innerHTML = `
-            <div class="modal-field"><span>GPU</span><span>${gpuName} × ${numGpus}</span></div>
+            <div class="modal-field"><span>GPU</span><span>${gpuName} x ${numGpus}</span></div>
             <div class="modal-field"><span>VRAM</span><span>${vramGb} GB</span></div>
             <div class="modal-field"><span>Price</span><span style="color:#00d9ff">$${parseFloat(dph).toFixed(3)}/hr</span></div>
             <div class="modal-field"><span>Image</span><span>ubuntu:22.04</span></div>
-            <div class="modal-field"><span>Auto-deploys</span><span>Ollama + qwen2.5:7b + Jarvis</span></div>`;
+            <div class="modal-field"><span>Auto-deploys</span><span>Ollama + ${esc('model from config')} + Jarvis</span></div>`;
         document.getElementById('modal-result').textContent = '';
         document.getElementById('modal-confirm-btn').disabled = false;
         document.getElementById('modal-overlay').classList.add('open');
@@ -568,12 +772,12 @@
 
     async function confirmDeploy() {
         if (!pendingOffer) return;
-        const diskGb = parseInt(document.getElementById('modal-disk').value) || 40;
+        const diskGb = parseInt(document.getElementById('modal-disk').value, 10) || 40;
         const btn = document.getElementById('modal-confirm-btn');
         const result = document.getElementById('modal-result');
         btn.disabled = true;
         result.className = '';
-        result.textContent = 'Deploying…';
+        result.textContent = 'Deploying...';
 
         try {
             const r = await fetch('/api/admin/vast/deploy', {
@@ -586,36 +790,83 @@
             if (!r.ok || !d.ok) throw new Error(d.error || 'Deploy failed');
             const contractId = d.result?.new_contract || '?';
             result.className = 'ok';
-            result.textContent = `✓ Instance #${contractId} created — setup takes ~3 min`;
-            toast(`Deployed! Instance #${contractId}`, 'ok');
+            result.textContent = `Instance #${contractId} created. Setup takes a few minutes.`;
+            toast(`Deployed instance #${contractId}`, 'ok');
             setTimeout(() => { closeModal(); loadInstances(); }, 2000);
-        } catch(e) {
+        } catch (e) {
             result.className = 'err';
-            result.textContent = '✗ ' + e.message;
+            result.textContent = 'Error: ' + e.message;
             btn.disabled = false;
         }
     }
 
-    // ── Instance actions ────────────────────────────────────────────────────
     async function destroyInstance(id) {
         if (!confirm(`Destroy instance #${id}? This is irreversible and deletes all data.`)) return;
         try {
             const r = await fetch(`/api/admin/vast/instances/${id}`, {
-                method: 'DELETE', credentials: 'include',
+                method: 'DELETE',
+                credentials: 'include',
             });
             const d = await r.json();
             if (!r.ok) throw new Error(d.error);
             toast(`Instance #${id} destroyed`, 'ok');
             loadInstances();
-        } catch(e) {
+        } catch (e) {
             toast('Destroy failed: ' + e.message, 'err');
+        }
+    }
+
+    async function startInstance(id) {
+        try {
+            const r = await fetch(`/api/admin/vast/instances/${id}/start`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+            const d = await r.json();
+            if (!r.ok || !d.ok) throw new Error(d.error || 'Start failed');
+            toast(`Instance #${id} start signal sent`, 'ok');
+            loadInstances();
+        } catch (e) {
+            toast('Start failed: ' + e.message, 'err');
+        }
+    }
+
+    async function stopInstance(id) {
+        if (!confirm(`Stop instance #${id}? Compute billing should pause once it stops.`)) return;
+        try {
+            const r = await fetch(`/api/admin/vast/instances/${id}/stop`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+            const d = await r.json();
+            if (!r.ok || !d.ok) throw new Error(d.error || 'Stop failed');
+            toast(`Instance #${id} stop signal sent`, 'ok');
+            loadInstances();
+        } catch (e) {
+            toast('Stop failed: ' + e.message, 'err');
+        }
+    }
+
+    async function restartInstance(id) {
+        if (!confirm(`Restart instance #${id}? This sends a stop/start cycle.`)) return;
+        try {
+            const r = await fetch(`/api/admin/vast/instances/${id}/restart`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+            const d = await r.json();
+            if (!r.ok || !d.ok) throw new Error(d.error || 'Restart failed');
+            toast(`Instance #${id} restart signal sent`, 'ok');
+            loadInstances();
+        } catch (e) {
+            toast('Restart failed: ' + e.message, 'err');
         }
     }
 
     async function redeployInstance(id, sshHost, sshPort) {
         const btn = event.target;
         btn.disabled = true;
-        btn.textContent = 'Deploying…';
+        btn.textContent = 'Deploying...';
         try {
             const r = await fetch(`/api/admin/vast/instances/${id}/redeploy`, {
                 method: 'POST',
@@ -625,20 +876,27 @@
             });
             const d = await r.json();
             if (!r.ok || !d.ok) throw new Error(d.error || 'Redeploy failed');
-            toast('Code deployed and Jarvis restarted ✓', 'ok');
-        } catch(e) {
+            toast('Code deployed and Jarvis restarted', 'ok');
+        } catch (e) {
             toast('Redeploy failed: ' + e.message, 'err');
         }
         btn.disabled = false;
-        btn.textContent = '↑ Redeploy Code';
+        btn.textContent = 'Redeploy Code';
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
     function esc(s) {
-        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
-    function refreshAll() { loadInstances(); }
+    function refreshAll() {
+        loadInstances();
+        loadOpsConfig();
+    }
 
     document.getElementById('modal-overlay').addEventListener('click', e => {
         if (e.target === document.getElementById('modal-overlay')) closeModal();
@@ -646,11 +904,9 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
     document.getElementById('f-gpu-name').addEventListener('keypress', e => { if (e.key === 'Enter') searchOffers(); });
 
-    // ── Init ─────────────────────────────────────────────────────────────────
     (async () => {
         if (!await checkAdmin()) return;
-        await Promise.all([checkApiStatus(), loadInstances()]);
-        // Auto-load offers with no filters on start
+        await Promise.all([checkApiStatus(), loadInstances(), loadOpsConfig()]);
         searchOffers();
     })();
 </script>
