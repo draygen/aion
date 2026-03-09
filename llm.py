@@ -5,12 +5,20 @@ from config import CONFIG
 
 def ask_llm_chat(messages: list) -> str:
     """Send a multi-turn conversation to the LLM. messages is a list of
-    {role, content} dicts (system, user, assistant)."""
+    {role, content} dicts (system, user, assistant).
+
+    If backend is 'openai', tries OpenAI first and falls back to Ollama on failure.
+    If backend is 'ollama', uses Ollama only.
+    """
     backend = CONFIG.get('backend', 'ollama')
     if backend == 'ollama':
         return _ollama_chat(messages)
     elif backend == 'openai':
-        return _openai_chat(messages)
+        try:
+            return _openai_chat(messages)
+        except Exception as e:
+            print(f"[llm] OpenAI failed ({e}), falling back to Ollama.")
+            return _ollama_chat(messages)
     else:
         raise ValueError(f"Unsupported backend: {backend}")
 
@@ -51,7 +59,7 @@ def _openai_chat(messages: list) -> str:
 
     client = openai.OpenAI(api_key=api_key)
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=CONFIG.get("openai_model", "gpt-4o"),
         messages=messages,
     )
     return response.choices[0].message.content
