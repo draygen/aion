@@ -28,6 +28,7 @@ from config import CONFIG
 from events import list_events, log_event
 from extractor import extract_and_save
 from llm import ask_llm_chat
+from profile_builder import get_profile_summary, build_profile_summary, invalidate_cache as invalidate_profile_cache
 from tools import available_tool_status, dispatch_tool_message, handle_ops_command
 
 app = Flask(__name__)
@@ -90,31 +91,39 @@ def handle_network_command(message: str, client_ip: str) -> str | None:
     return execution.output
 
 
+_SYSTEM_STATIC_HEADER = """\
+You are JARVIS, an AI assistant created by Brian Wallace (aka draygen).
+Style: informal, witty, direct, occasionally sarcastic but always loyal to Brian.
+Keep answers concise unless Brian asks for detail.
+
+CRITICAL RULES — treat these as hard constraints:
+1. For questions about real messages, conversations, or events: ONLY quote or reference \
+content that appears VERBATIM in the Memory section below. Do NOT paraphrase or reconstruct.
+2. If Memory does not contain the answer, say: "I don't have that in my memory."
+3. NEVER invent messages, dates, names, relationships, or events. Not even plausible ones.
+4. When showing messages, always include From:, To:, and Date: from the Memory entry.
+5. For general knowledge questions (not about Brian or real people), answer normally.
+6. For infrastructure checks, only use the explicit built-in ops commands on authorized targets.
+"""
+
+
 def build_system_prompt(user_text: str, username: str = "brian") -> str:
-    facts = get_facts(user_text, k=15, user_scope=username)
+    # Static prefix — identical on every Brian request, enabling OpenAI prompt caching
     if username.lower() == "brian":
         identity_line = "You are talking to Brian unless someone explicitly introduces themselves as someone else."
     else:
         identity_line = f"You are talking to {username}."
 
-    system = (
-        "You are JARVIS, an AI assistant created by Brian Wallace (aka draygen).\n"
-        f"{identity_line}\n"
-        "Brian's wife is Jennifer (Jenn) Frotten Wallace.\n"
-        "Style: informal, witty, direct, occasionally sarcastic but always loyal to Brian.\n"
-        "Keep answers concise unless Brian asks for detail.\n\n"
-        "CRITICAL RULES — treat these as hard constraints:\n"
-        "1. For questions about real messages, conversations, or events: ONLY quote or reference "
-        "content that appears VERBATIM in the Memory section below. Do NOT paraphrase or reconstruct.\n"
-        "2. If Memory does not contain the answer, say: \"I don't have that in my memory.\"\n"
-        "3. NEVER invent messages, dates, names, relationships, or events. Not even plausible ones.\n"
-        "4. When showing messages, always include From:, To:, and Date: from the Memory entry.\n"
-        "5. For general knowledge questions (not about Brian or real people), answer normally.\n"
-        "6. For infrastructure checks, only use the explicit built-in ops commands on authorized targets.\n"
-    )
+    profile = get_profile_summary()
+    profile_section = f"\n## Who Brian Is\n{profile}\n" if profile else ""
+
+    system = _SYSTEM_STATIC_HEADER + identity_line + "\n" + profile_section
+
+    # Dynamic suffix — query-specific retrieved facts (changes per request, not cached)
+    facts = get_facts(user_text, k=10, user_scope=username)
     if facts:
         joined = "\n---\n".join(facts)
-        system += f"\nMemory (ONLY reference content that appears here):\n---\n{joined}\n---\n"
+        system += f"\n## Relevant Memory for this query\n---\n{joined}\n---\n"
     return system
 
 
@@ -359,6 +368,19 @@ def api_admin_network_run():
     if result is None:
         return jsonify({"error": "Unsupported command"}), 400
     return jsonify({"ok": True, "result": result})
+
+
+@app.route("/api/admin/profile/rebuild", methods=["POST"])
+@admin_required
+def api_admin_profile_rebuild():
+    try:
+        invalidate_profile_cache()
+        summary = build_profile_summary(save=True)
+        if not summary:
+            return jsonify({"error": "No source facts found"}), 400
+        return jsonify({"ok": True, "chars": len(summary), "preview": summary[:300] + "..."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/admin/events")
