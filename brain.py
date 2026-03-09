@@ -1,5 +1,7 @@
+import hashlib
 import json
 import os
+import pickle
 from typing import List, Dict, Any, Optional
 
 from config import CONFIG
@@ -9,6 +11,10 @@ memory: List[Dict[str, Any]] = []
 # TF-IDF cache
 _tfidf_vectorizer = None
 _tfidf_matrix = None
+
+# OpenAI embedding cache
+_embed_vectors = None  # np.ndarray shape (N, dims) once built
+_EMBED_CACHE_PATH = "data/embeddings_cache.pkl"
 
 
 def _shared_facts_path() -> str:
@@ -168,12 +174,77 @@ def _load_fact_records(files: List[str]) -> List[Dict[str, Any]]:
     return records
 
 
+def _fact_text(fact: Dict[str, Any]) -> str:
+    inp = (fact.get("input") or "").strip()
+    out = (fact.get("output") or "").strip()
+    return (inp + " \n " + out).strip()
+
+
+def _fact_hash(text: str) -> str:
+    return hashlib.md5(text.encode("utf-8")).hexdigest()
+
+
+def _load_embed_cache() -> dict:
+    try:
+        with open(_EMBED_CACHE_PATH, "rb") as f:
+            return pickle.load(f)
+    except Exception:
+        return {}
+
+
+def _save_embed_cache(cache: dict) -> None:
+    os.makedirs(os.path.dirname(_EMBED_CACHE_PATH), exist_ok=True)
+    with open(_EMBED_CACHE_PATH, "wb") as f:
+        pickle.dump(cache, f)
+
+
+def _ensure_openai_embeddings() -> None:
+    """Build OpenAI embedding matrix for current memory, using disk cache for unchanged facts."""
+    global _embed_vectors
+    if _embed_vectors is not None:
+        return
+    if not memory:
+        return
+    api_key = CONFIG.get("openai_api_key", "")
+    if not api_key:
+        return
+    try:
+        import numpy as np
+        import openai
+
+        embed_model = CONFIG.get("openai_embed_model", "text-embedding-3-small")
+        client = openai.OpenAI(api_key=api_key)
+
+        texts = [_fact_text(f) for f in memory]
+        hashes = [_fact_hash(t) for t in texts]
+        cache = _load_embed_cache()
+
+        to_embed = [(i, texts[i]) for i, h in enumerate(hashes) if h not in cache]
+        if to_embed:
+            batch_size = 100
+            for start in range(0, len(to_embed), batch_size):
+                batch = to_embed[start : start + batch_size]
+                idxs, batch_texts = zip(*batch)
+                resp = client.embeddings.create(model=embed_model, input=list(batch_texts))
+                for j, emb in enumerate(resp.data):
+                    cache[hashes[idxs[j]]] = np.array(emb.embedding, dtype=np.float32)
+            _save_embed_cache(cache)
+            print(f"[brain] Embedded {len(to_embed)} new facts (cache: {len(cache)} total).")
+
+        _embed_vectors = np.array([cache[h] for h in hashes], dtype=np.float32)
+        print(f"[brain] OpenAI embedding index ready — {len(memory)} facts, model={embed_model}.")
+    except Exception as e:
+        print(f"[brain] OpenAI embeddings failed, will fall back to TF-IDF: {e}")
+        _embed_vectors = None
+
+
 def load_facts(files: List[str] = None, user_scope: Optional[str] = None) -> int:
     """Load facts into memory. Returns count loaded into active retrieval memory."""
-    global memory, _tfidf_vectorizer, _tfidf_matrix
+    global memory, _tfidf_vectorizer, _tfidf_matrix, _embed_vectors
     memory.clear()
     _tfidf_vectorizer = None
     _tfidf_matrix = None
+    _embed_vectors = None
 
     if files is None:
         files = _default_files_for_user(user_scope or _primary_user())
@@ -228,6 +299,7 @@ def add_fact(
         memory.insert(0, fact)
         _tfidf_vectorizer = None
         _tfidf_matrix = None
+        globals()["_embed_vectors"] = None
     try:
         _append_jsonl(path, fact)
     except Exception as e:
@@ -292,6 +364,40 @@ def get_facts(input_str: str, k: int = 12, user_scope: Optional[str] = None) -> 
     use_global_cache = not normalized_scope or normalized_scope == _primary_user()
     fact_pool = memory if use_global_cache else _load_fact_records(_default_files_for_user(normalized_scope))
 
+    # Path 1: OpenAI semantic embeddings
+    if use_global_cache and CONFIG.get("embed_backend") == "openai":
+        _ensure_openai_embeddings()
+        if _embed_vectors is not None:
+            try:
+                import numpy as np
+                import openai
+
+                embed_model = CONFIG.get("openai_embed_model", "text-embedding-3-small")
+                client = openai.OpenAI(api_key=CONFIG["openai_api_key"])
+                resp = client.embeddings.create(model=embed_model, input=[input_str])
+                q_vec = np.array(resp.data[0].embedding, dtype=np.float32)
+                norms = np.linalg.norm(_embed_vectors, axis=1)
+                q_norm = np.linalg.norm(q_vec)
+                sims = (_embed_vectors @ q_vec) / (norms * q_norm + 1e-9)
+                ranked = sorted(enumerate(sims), key=lambda t: t[1], reverse=True)
+                results: List[str] = []
+                seen: set = set()
+                for idx, score in ranked[: k * 3]:
+                    if score < 0.1:
+                        continue
+                    snip = _format_snippet(memory[idx])
+                    if not snip or snip in seen:
+                        continue
+                    seen.add(snip)
+                    results.append(snip)
+                    if len(results) >= k:
+                        break
+                if results:
+                    return results
+            except Exception as e:
+                print(f"[brain] OpenAI embedding query failed, falling back: {e}")
+
+    # Path 2: TF-IDF
     if use_global_cache:
         _ensure_tfidf()
     if use_global_cache and _tfidf_vectorizer is not None and _tfidf_matrix is not None:
