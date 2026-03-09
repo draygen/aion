@@ -2,7 +2,7 @@
 import os
 import secrets
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import bcrypt
@@ -13,6 +13,21 @@ from config import CONFIG
 DB_PATH = "data/jarvis.db"
 MIN_PASSWORD_LENGTH = 10
 PASSWORD_CHANGE_ALLOWED_PATHS = {"/api/change-password", "/api/whoami", "/api/logout"}
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _utc_now_iso() -> str:
+    return _utc_now().isoformat()
+
+
+def _parse_db_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def get_db():
@@ -46,8 +61,28 @@ def init_db():
             ts       TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_history_user ON history(user_id, id DESC);
+        CREATE TABLE IF NOT EXISTS events (
+            id         INTEGER PRIMARY KEY,
+            user_id    INTEGER,
+            session_id TEXT,
+            channel    TEXT,
+            thread_id  TEXT,
+            message_id TEXT,
+            event_type TEXT NOT NULL,
+            source     TEXT NOT NULL,
+            tool_name  TEXT,
+            content    TEXT,
+            payload    TEXT,
+            ts         TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, id DESC);
     """)
     _ensure_user_column(db, "must_change_password", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_history_column(db, "session_id", "TEXT")
+    _ensure_history_column(db, "channel", "TEXT")
+    _ensure_history_column(db, "thread_id", "TEXT")
+    _ensure_history_column(db, "message_id", "TEXT")
     db.commit()
 
     # Create Brian's admin account on first run
@@ -62,7 +97,7 @@ def init_db():
         pw_hash = bcrypt.hashpw(admin_pass.encode(), bcrypt.gensalt()).decode()
         db.execute(
             "INSERT INTO users (username, pw_hash, role, must_change_password, created) VALUES (?, ?, 'admin', 1, ?)",
-            ("brian", pw_hash, datetime.utcnow().isoformat()),
+            ("brian", pw_hash, _utc_now_iso()),
         )
         db.commit()
         print("[auth] Created admin user: brian")
@@ -79,6 +114,12 @@ def _ensure_user_column(db, column_name: str, definition: str) -> None:
     columns = {row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()}
     if column_name not in columns:
         db.execute(f"ALTER TABLE users ADD COLUMN {column_name} {definition}")
+
+
+def _ensure_history_column(db, column_name: str, definition: str) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(history)").fetchall()}
+    if column_name not in columns:
+        db.execute(f"ALTER TABLE history ADD COLUMN {column_name} {definition}")
 
 
 def _mark_bootstrap_password_if_needed(db, username: str, configured_password: str) -> None:
@@ -131,7 +172,7 @@ def create_user(
     db = get_db()
     cur = db.execute(
         "INSERT INTO users (username, pw_hash, role, must_change_password, created) VALUES (?, ?, ?, ?, ?)",
-        (username.lower(), pw_hash, role, 1 if must_change_password else 0, datetime.utcnow().isoformat()),
+        (username.lower(), pw_hash, role, 1 if must_change_password else 0, _utc_now_iso()),
     )
     db.commit()
     user_id = cur.lastrowid
@@ -154,7 +195,7 @@ def verify_login(username: str, password: str):
 
 def create_token(user_id: int) -> str:
     token = secrets.token_hex(32)
-    expires = (datetime.utcnow() + timedelta(days=30)).isoformat()
+    expires = (_utc_now() + timedelta(days=30)).isoformat()
     db = get_db()
     db.execute(
         "INSERT INTO tokens (token, user_id, expires) VALUES (?, ?, ?)",
@@ -201,13 +242,13 @@ def get_user_by_token(token: str):
     if not row:
         db.close()
         return None
-    if datetime.fromisoformat(row["expires"]) < datetime.utcnow():
+    if _parse_db_datetime(row["expires"]) < _utc_now():
         db.execute("DELETE FROM tokens WHERE token = ?", (token,))
         db.commit()
         db.close()
         return None
     # Sliding 30-day expiry
-    new_expires = (datetime.utcnow() + timedelta(days=30)).isoformat()
+    new_expires = (_utc_now() + timedelta(days=30)).isoformat()
     db.execute("UPDATE tokens SET expires = ? WHERE token = ?", (new_expires, token))
     db.commit()
     db.close()
@@ -226,6 +267,7 @@ def delete_user(user_id: int):
     db.execute("DELETE FROM users WHERE id = ?", (user_id,))
     db.execute("DELETE FROM tokens WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM history WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM events WHERE user_id = ?", (user_id,))
     db.commit()
     db.close()
 

@@ -3,12 +3,18 @@ import base64
 import io
 import json
 import re
+import uuid
 from collections import defaultdict, deque
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Flask, g, redirect, render_template, request, jsonify, make_response
-from flask_cors import CORS
 from gtts import gTTS
+
+try:
+    from flask_cors import CORS
+except ImportError:  # pragma: no cover - test/dev fallback when CORS extras are missing
+    def CORS(app, *args, **kwargs):
+        return app
 
 import auth
 import vast
@@ -19,9 +25,10 @@ from auth import (
 )
 from brain import get_facts, add_fact
 from config import CONFIG
+from events import list_events, log_event
 from extractor import extract_and_save
 from llm import ask_llm_chat
-from tools import available_tool_status, handle_ops_command, is_authorized_target
+from tools import available_tool_status, dispatch_tool_message, handle_ops_command
 
 app = Flask(__name__)
 CORS(app, origins=CONFIG.get("cors_origins"), supports_credentials=True)
@@ -43,6 +50,10 @@ _MEMORY_CATEGORIES = {
     'Major Life Events': ['moved', 'new apartment', 'new house', 'new job', 'fired', 'arrested', 'jail', 'graduated', 'graduation'],
 }
 _mem_browse_cache = None
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _should_use_secure_cookie() -> bool:
@@ -73,7 +84,10 @@ def log_chat(ip: str, user_msg: str, assistant_msg: str):
 
 
 def handle_network_command(message: str, client_ip: str) -> str | None:
-    return handle_ops_command(message, client_ip)
+    execution = dispatch_tool_message(message, client_ip)
+    if not execution:
+        return None
+    return execution.output
 
 
 def build_system_prompt(user_text: str, username: str = "brian") -> str:
@@ -104,26 +118,81 @@ def build_system_prompt(user_text: str, username: str = "brian") -> str:
     return system
 
 
-def _load_user_history(user_id: int) -> list:
+def _normalize_envelope_value(value: str | None, default: str, max_len: int = 120) -> str:
+    text = (value or "").strip()
+    if not text:
+        return default
+    sanitized = re.sub(r"[^a-zA-Z0-9._:/@-]+", "_", text)
+    return sanitized[:max_len] or default
+
+
+def _build_chat_envelope(data: dict, user_id: int, username: str) -> dict:
+    channel = _normalize_envelope_value(data.get("channel"), "web", max_len=40)
+    thread_default = f"{channel}:{username or user_id}"
+    thread_id = _normalize_envelope_value(data.get("thread_id"), thread_default, max_len=120)
+    session_default = f"{channel}:{thread_id}"
+    session_id = _normalize_envelope_value(data.get("session_id"), session_default, max_len=160)
+    request_message_id = _normalize_envelope_value(
+        data.get("message_id"),
+        f"msg-{uuid.uuid4().hex}",
+        max_len=160,
+    )
+    response_message_id = f"msg-{uuid.uuid4().hex}"
+    metadata = data.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    return {
+        "channel": channel,
+        "thread_id": thread_id,
+        "session_id": session_id,
+        "request_message_id": request_message_id,
+        "response_message_id": response_message_id,
+        "metadata": metadata,
+    }
+
+
+def _load_user_history(user_id: int, session_id: str | None = None) -> list:
     db = get_db()
-    rows = db.execute(
-        "SELECT role, content FROM history WHERE user_id=? ORDER BY id DESC LIMIT 40",
-        (user_id,),
-    ).fetchall()
+    if session_id:
+        rows = db.execute(
+            "SELECT role, content FROM history WHERE user_id=? AND session_id=? ORDER BY id DESC LIMIT 40",
+            (user_id, session_id),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT role, content FROM history WHERE user_id=? ORDER BY id DESC LIMIT 40",
+            (user_id,),
+        ).fetchall()
     db.close()
     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
 
-def _save_history_turns(user_id: int, user_msg: str, assistant_msg: str):
+def _save_history_turns(
+    user_id: int,
+    user_msg: str,
+    assistant_msg: str,
+    *,
+    session_id: str | None = None,
+    channel: str | None = None,
+    thread_id: str | None = None,
+    user_message_id: str | None = None,
+    assistant_message_id: str | None = None,
+):
     db = get_db()
-    ts = datetime.utcnow().isoformat()
+    ts = _utc_now_iso()
     db.execute(
-        "INSERT INTO history (user_id, role, content, ts) VALUES (?, ?, ?, ?)",
-        (user_id, "user", user_msg, ts),
+        """
+        INSERT INTO history (user_id, role, content, ts, session_id, channel, thread_id, message_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (user_id, "user", user_msg, ts, session_id, channel, thread_id, user_message_id),
     )
     db.execute(
-        "INSERT INTO history (user_id, role, content, ts) VALUES (?, ?, ?, ?)",
-        (user_id, "assistant", assistant_msg, ts),
+        """
+        INSERT INTO history (user_id, role, content, ts, session_id, channel, thread_id, message_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (user_id, "assistant", assistant_msg, ts, session_id, channel, thread_id, assistant_message_id),
     )
     db.commit()
     db.close()
@@ -292,6 +361,26 @@ def api_admin_network_run():
     return jsonify({"ok": True, "result": result})
 
 
+@app.route("/api/admin/events")
+@admin_required
+def api_admin_events():
+    raw_limit = request.args.get("limit", "50")
+    try:
+        limit = int(raw_limit)
+    except ValueError:
+        return jsonify({"error": "limit must be an integer"}), 400
+    session_id = (request.args.get("session_id") or "").strip() or None
+    user_id = request.args.get("user_id")
+    if user_id not in (None, ""):
+        try:
+            user_id = int(user_id)
+        except ValueError:
+            return jsonify({"error": "user_id must be an integer"}), 400
+    else:
+        user_id = None
+    return jsonify({"events": list_events(user_id=user_id, session_id=session_id, limit=limit)})
+
+
 @app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
 @admin_required
 def api_admin_delete_user(user_id):
@@ -321,11 +410,24 @@ def chat():
 
     user_id = g.user["id"]
     username = g.user["username"]
+    envelope = _build_chat_envelope(data, user_id, username)
 
     try:
         client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
         if "," in client_ip:
             client_ip = client_ip.split(",")[0].strip()
+
+        log_event(
+            user_id=user_id,
+            session_id=envelope["session_id"],
+            channel=envelope["channel"],
+            thread_id=envelope["thread_id"],
+            message_id=envelope["request_message_id"],
+            event_type="user_message_received",
+            source="chat_api",
+            content=user_message,
+            payload={"metadata": envelope["metadata"]},
+        )
 
         # Explicit remember shortcut — no LLM needed
         if user_message.lower().startswith("remember:"):
@@ -333,15 +435,52 @@ def chat():
             if fact_text:
                 add_fact(None, fact_text, user_scope=username)
                 response = f"Got it. I'll remember: {fact_text}"
-                log_chat(client_ip, user_message, response)
-                return jsonify({"response": response})
+                log_event(
+                    user_id=user_id,
+                    session_id=envelope["session_id"],
+                    channel=envelope["channel"],
+                    thread_id=envelope["thread_id"],
+                    message_id=envelope["request_message_id"],
+                    event_type="memory_written",
+                    source="remember_shortcut",
+                    content=fact_text,
+                    payload={"destination": "user_memory"},
+                )
 
         # Network commands bypass LLM
-        network_response = handle_network_command(user_message, client_ip)
-        if network_response:
-            response = network_response
+        if not user_message.lower().startswith("remember:"):
+            tool_execution = dispatch_tool_message(user_message, client_ip)
         else:
-            history = _load_user_history(user_id)
+            tool_execution = None
+
+        if "response" not in locals() and tool_execution:
+            log_event(
+                user_id=user_id,
+                session_id=envelope["session_id"],
+                channel=envelope["channel"],
+                thread_id=envelope["thread_id"],
+                message_id=envelope["request_message_id"],
+                event_type="tool_invoked",
+                source="tool_registry",
+                tool_name=tool_execution.tool_id,
+                content=user_message,
+                payload={"args": tool_execution.args},
+            )
+            response = tool_execution.output
+            log_event(
+                user_id=user_id,
+                session_id=envelope["session_id"],
+                channel=envelope["channel"],
+                thread_id=envelope["thread_id"],
+                message_id=envelope["response_message_id"],
+                event_type="tool_result",
+                source="tool_registry",
+                tool_name=tool_execution.tool_id,
+                content=response,
+                payload={"args": tool_execution.args},
+            )
+        elif "response" not in locals():
+            history = _load_user_history(user_id, session_id=envelope["session_id"])
             system_prompt = build_system_prompt(user_message, username)
             messages = [{"role": "system", "content": system_prompt}]
             messages.extend(history)
@@ -350,14 +489,42 @@ def chat():
             response = ask_llm_chat(messages)
             response = response.strip() or "(no response)"
 
-            _save_history_turns(user_id, user_message, response)
-
             if CONFIG.get("auto_extract_facts", True):
                 extract_and_save(user_message, response, username, user_scope=username)
 
+        _save_history_turns(
+            user_id,
+            user_message,
+            response,
+            session_id=envelope["session_id"],
+            channel=envelope["channel"],
+            thread_id=envelope["thread_id"],
+            user_message_id=envelope["request_message_id"],
+            assistant_message_id=envelope["response_message_id"],
+        )
         log_chat(client_ip, user_message, response)
+        log_event(
+            user_id=user_id,
+            session_id=envelope["session_id"],
+            channel=envelope["channel"],
+            thread_id=envelope["thread_id"],
+            message_id=envelope["response_message_id"],
+            event_type="assistant_message_sent",
+            source="chat_api",
+            content=response,
+            payload={"request_message_id": envelope["request_message_id"]},
+        )
 
-        result = {"response": response}
+        result = {
+            "response": response,
+            "session": {
+                "channel": envelope["channel"],
+                "thread_id": envelope["thread_id"],
+                "session_id": envelope["session_id"],
+                "message_id": envelope["response_message_id"],
+                "reply_to": envelope["request_message_id"],
+            },
+        }
 
         tts_enabled = data.get("tts", True)
         if tts_enabled and response != "(no response)":

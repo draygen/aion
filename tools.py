@@ -5,13 +5,87 @@ import ipaddress
 import re
 import shutil
 import subprocess
-from typing import Iterable
+from dataclasses import dataclass
+from typing import Callable, Iterable, Optional
 from urllib.parse import urlparse
 
 from config import CONFIG
 
 _HOST_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:-]*[a-zA-Z0-9]$")
 _DEFAULT_FFUF_WORDLIST = "/workspace/jarvis/data/admin_wordlists/ffuf_quick.txt"
+_TOOL_REGISTRY = None
+
+
+@dataclass
+class ToolInvocation:
+    tool_id: str
+    label: str
+    args: dict
+
+
+@dataclass
+class ToolExecution:
+    tool_id: str
+    label: str
+    args: dict
+    output: str
+
+
+@dataclass
+class RegisteredTool:
+    tool_id: str
+    label: str
+    description: str
+    matcher: Callable[[str], Optional[dict]]
+    executor: Callable[[dict, dict], str]
+    installed: Callable[[], bool]
+
+
+class ToolRegistry:
+    def __init__(self) -> None:
+        self._tools: list[RegisteredTool] = []
+
+    def register(self, tool: RegisteredTool) -> None:
+        self._tools.append(tool)
+
+    def list_tools(self) -> list[dict]:
+        return [
+            {
+                "id": tool.tool_id,
+                "label": tool.label,
+                "description": tool.description,
+                "installed": bool(tool.installed()),
+            }
+            for tool in self._tools
+        ]
+
+    def match(self, message: str) -> ToolInvocation | None:
+        text = (message or "").strip()
+        for tool in self._tools:
+            args = tool.matcher(text)
+            if args is not None:
+                return ToolInvocation(tool_id=tool.tool_id, label=tool.label, args=args)
+        return None
+
+    def dispatch(self, message: str, context: dict | None = None) -> ToolExecution | None:
+        invocation = self.match(message)
+        if not invocation:
+            return None
+        context = context or {}
+        tool = self._tool_by_id(invocation.tool_id)
+        output = tool.executor(invocation.args, context)
+        return ToolExecution(
+            tool_id=invocation.tool_id,
+            label=invocation.label,
+            args=invocation.args,
+            output=output,
+        )
+
+    def _tool_by_id(self, tool_id: str) -> RegisteredTool:
+        for tool in self._tools:
+            if tool.tool_id == tool_id:
+                return tool
+        raise KeyError(tool_id)
 
 
 def _normalize_target(target: str) -> str:
@@ -290,97 +364,212 @@ def run_ffuf(target: str) -> str:
     )
 
 
-def available_tool_status() -> list[dict]:
-    return [
-        {"id": "nslookup", "label": "NSLookup", "installed": _tool_installed("nslookup")},
-        {"id": "whois", "label": "WHOIS", "installed": _tool_installed("whois")},
-        {"id": "dig", "label": "DIG", "installed": _tool_installed("dig")},
-        {"id": "ping", "label": "Ping", "installed": _tool_installed("ping")},
-        {"id": "traceroute", "label": "Traceroute", "installed": _tool_installed("traceroute")},
-        {"id": "nmap", "label": "Nmap", "installed": _tool_installed("nmap")},
-        {"id": "httpx", "label": "httpx", "installed": _tool_installed("httpx")},
-        {"id": "whatweb", "label": "WhatWeb", "installed": _tool_installed("whatweb")},
-        {"id": "nikto", "label": "Nikto", "installed": _tool_installed("nikto")},
-        {"id": "testssl", "label": "testssl.sh", "installed": bool(_first_installed("testssl.sh", "/usr/local/bin/testssl.sh"))},
-        {"id": "zap", "label": "OWASP ZAP", "installed": bool(_first_installed("zap-baseline.py", "/usr/share/zaproxy/zap-baseline.py"))},
-        {"id": "ffuf", "label": "ffuf", "installed": _tool_installed("ffuf")},
-    ]
+def _format_tool_output(label: str, target: str, output: str, suffix: str = "") -> str:
+    heading = f"{label} for {target}"
+    if suffix:
+        heading += f" {suffix}"
+    return f"{heading}:\n```\n{output}\n```"
 
 
-def handle_ops_command(message: str, client_ip: str) -> str | None:
-    if not CONFIG.get("network_ops_enabled", True):
+def _exact_phrase_match(*phrases: str) -> Callable[[str], Optional[dict]]:
+    normalized = {phrase.lower() for phrase in phrases}
+
+    def matcher(text: str) -> Optional[dict]:
+        if text.strip().lower() in normalized:
+            return {}
         return None
 
-    text = (message or "").strip()
-    lowered = text.lower()
-    if any(p in lowered for p in ["my ip", "my public ip", "what is my ip", "whats my ip"]):
-        return f"Your public IP address is: {client_ip}"
+    return matcher
 
-    m = re.match(r"^(?:nslookup|dns lookup|lookup)\s+([^\s]+)$", lowered)
-    if m:
-        target = _extract_target(m.group(1))
-        return f"NSLookup for {target}:\n```\n{run_nslookup(target)}\n```"
 
-    m = re.match(r"^whois\s+([^\s]+)$", lowered)
-    if m:
-        target = _extract_target(m.group(1))
-        return f"WHOIS for {target}:\n```\n{run_whois(target)}\n```"
+def _regex_match(pattern: str, arg_names: tuple[str, ...]) -> Callable[[str], Optional[dict]]:
+    compiled = re.compile(pattern, re.IGNORECASE)
 
-    m = re.match(r"^(?:dig|dns)\s+([^\s]+)(?:\s+([a-z]+))?$", lowered)
-    if m:
-        target, record_type = _extract_target(m.group(1)), (m.group(2) or "A")
-        return f"DIG for {target} ({record_type.upper()}):\n```\n{run_dig(target, record_type)}\n```"
+    def matcher(text: str) -> Optional[dict]:
+        match = compiled.match((text or "").strip())
+        if not match:
+            return None
+        groups = match.groups()
+        return {name: groups[index] for index, name in enumerate(arg_names)}
 
-    m = re.match(r"^ping\s+([^\s]+)$", lowered)
-    if m:
-        target = _extract_target(m.group(1))
-        return f"PING for {target}:\n```\n{run_ping(target)}\n```"
+    return matcher
 
-    m = re.match(r"^(?:traceroute|trace)\s+([^\s]+)$", lowered)
-    if m:
-        target = _extract_target(m.group(1))
-        return f"Traceroute for {target}:\n```\n{run_traceroute(target)}\n```"
 
-    m = re.match(r"^(?:(?:nmap|scan|web scan|http scan))\s+([^\s]+)$", lowered)
-    if m:
-        target = _extract_target(m.group(1))
-        return (
-            f"Nmap service scan for {target}:\n```\n{run_nmap_service_scan(target)}\n```"
+def _build_tool_registry() -> ToolRegistry:
+    registry = ToolRegistry()
+    registry.register(
+        RegisteredTool(
+            tool_id="my_ip",
+            label="Public IP",
+            description="Report the requester IP seen by the server.",
+            matcher=_exact_phrase_match("my ip", "my public ip", "what is my ip", "whats my ip"),
+            executor=lambda args, context: f"Your public IP address is: {context.get('client_ip', 'unknown')}",
+            installed=lambda: True,
         )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="nslookup",
+            label="NSLookup",
+            description="Run DNS lookup for an authorized host.",
+            matcher=_regex_match(r"^(?:nslookup|dns lookup|lookup)\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output("NSLookup", _extract_target(args["target"]), run_nslookup(args["target"])),
+            installed=lambda: _tool_installed("nslookup"),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="whois",
+            label="WHOIS",
+            description="Run WHOIS on an authorized host.",
+            matcher=_regex_match(r"^whois\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output("WHOIS", _extract_target(args["target"]), run_whois(args["target"])),
+            installed=lambda: _tool_installed("whois"),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="dig",
+            label="DIG",
+            description="Query DNS records for an authorized host.",
+            matcher=_regex_match(r"^(?:dig|dns)\s+([^\s]+)(?:\s+([a-z]+))?$", ("target", "record_type")),
+            executor=lambda args, context: _format_tool_output(
+                "DIG",
+                _extract_target(args["target"]),
+                run_dig(args["target"], args.get("record_type") or "A"),
+                f"({(args.get('record_type') or 'A').upper()})",
+            ),
+            installed=lambda: _tool_installed("dig"),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="ping",
+            label="Ping",
+            description="Ping an authorized host.",
+            matcher=_regex_match(r"^ping\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output("PING", _extract_target(args["target"]), run_ping(args["target"])),
+            installed=lambda: _tool_installed("ping"),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="traceroute",
+            label="Traceroute",
+            description="Run traceroute to an authorized host.",
+            matcher=_regex_match(r"^(?:traceroute|trace)\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output("Traceroute", _extract_target(args["target"]), run_traceroute(args["target"])),
+            installed=lambda: _tool_installed("traceroute"),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="nmap_service_scan",
+            label="Nmap",
+            description="Run a top-ports service scan against an authorized host.",
+            matcher=_regex_match(r"^(?:(?:nmap|scan|web scan|http scan))\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output(
+                "Nmap service scan",
+                _extract_target(args["target"]),
+                run_nmap_service_scan(_extract_target(args["target"])),
+            ),
+            installed=lambda: _tool_installed("nmap"),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="nmap_ping_sweep",
+            label="Nmap Ping Sweep",
+            description="Discover live hosts in an authorized CIDR.",
+            matcher=_regex_match(r"^(?:ping sweep|discover hosts)\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output("Nmap ping sweep", args["target"], run_nmap_ping_sweep(args["target"])),
+            installed=lambda: _tool_installed("nmap"),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="httpx",
+            label="httpx",
+            description="Probe an authorized URL with httpx.",
+            matcher=_regex_match(r"^httpx\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output("httpx", _extract_target(args["target"]), run_httpx(args["target"])),
+            installed=lambda: bool(_first_installed("httpx")),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="whatweb",
+            label="WhatWeb",
+            description="Fingerprint an authorized URL with WhatWeb.",
+            matcher=_regex_match(r"^whatweb\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output("WhatWeb", _extract_target(args["target"]), run_whatweb(args["target"])),
+            installed=lambda: _tool_installed("whatweb"),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="nikto",
+            label="Nikto",
+            description="Run Nikto against an authorized URL.",
+            matcher=_regex_match(r"^nikto\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output("Nikto", _extract_target(args["target"]), run_nikto(args["target"])),
+            installed=lambda: _tool_installed("nikto"),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="testssl",
+            label="testssl.sh",
+            description="Run TLS checks against an authorized host.",
+            matcher=_regex_match(r"^testssl\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output("testssl.sh", _extract_target(args["target"]), run_testssl(args["target"])),
+            installed=lambda: bool(_first_installed("testssl.sh", "/usr/local/bin/testssl.sh")),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="zap_baseline",
+            label="OWASP ZAP",
+            description="Run the ZAP baseline scan against an authorized URL.",
+            matcher=_regex_match(r"^(?:zap|zap baseline)\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output("OWASP ZAP baseline", _extract_target(args["target"]), run_zap_baseline(args["target"])),
+            installed=lambda: bool(_first_installed("zap-baseline.py", "/usr/share/zaproxy/zap-baseline.py")),
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            tool_id="ffuf",
+            label="ffuf",
+            description="Run ffuf against an authorized URL or host.",
+            matcher=_regex_match(r"^ffuf\s+([^\s]+)$", ("target",)),
+            executor=lambda args, context: _format_tool_output("ffuf", _extract_target(args["target"]), run_ffuf(args["target"])),
+            installed=lambda: _tool_installed("ffuf"),
+        )
+    )
+    return registry
 
-    m = re.match(r"^(?:ping sweep|discover hosts)\s+([^\s]+)$", lowered)
-    if m:
-        target = m.group(1)
-        return f"Nmap ping sweep for {target}:\n```\n{run_nmap_ping_sweep(target)}\n```"
 
-    m = re.match(r"^httpx\s+([^\s]+)$", lowered)
-    if m:
-        target = m.group(1)
-        return f"httpx for {_extract_target(target)}:\n```\n{run_httpx(target)}\n```"
+def get_tool_registry() -> ToolRegistry:
+    global _TOOL_REGISTRY
+    if _TOOL_REGISTRY is None:
+        _TOOL_REGISTRY = _build_tool_registry()
+    return _TOOL_REGISTRY
 
-    m = re.match(r"^whatweb\s+([^\s]+)$", lowered)
-    if m:
-        target = m.group(1)
-        return f"WhatWeb for {_extract_target(target)}:\n```\n{run_whatweb(target)}\n```"
 
-    m = re.match(r"^nikto\s+([^\s]+)$", lowered)
-    if m:
-        target = m.group(1)
-        return f"Nikto for {_extract_target(target)}:\n```\n{run_nikto(target)}\n```"
+def available_tool_status() -> list[dict]:
+    return get_tool_registry().list_tools()
 
-    m = re.match(r"^testssl\s+([^\s]+)$", lowered)
-    if m:
-        target = m.group(1)
-        return f"testssl.sh for {_extract_target(target)}:\n```\n{run_testssl(target)}\n```"
 
-    m = re.match(r"^(?:zap|zap baseline)\s+([^\s]+)$", lowered)
-    if m:
-        target = m.group(1)
-        return f"OWASP ZAP baseline for {_extract_target(target)}:\n```\n{run_zap_baseline(target)}\n```"
+def dispatch_tool_message(message: str, client_ip: str) -> ToolExecution | None:
+    if not CONFIG.get("network_ops_enabled", True):
+        return None
+    return get_tool_registry().dispatch(message, {"client_ip": client_ip})
 
-    m = re.match(r"^ffuf\s+([^\s]+)$", lowered)
-    if m:
-        target = m.group(1)
-        return f"ffuf for {_extract_target(target)}:\n```\n{run_ffuf(target)}\n```"
 
-    return _unsupported_command_help()
+def handle_ops_command(message: str, client_ip: str, include_help: bool = True) -> str | None:
+    execution = dispatch_tool_message(message, client_ip)
+    if execution:
+        return execution.output
+    if include_help and CONFIG.get("network_ops_enabled", True):
+        return _unsupported_command_help()
+    return None
