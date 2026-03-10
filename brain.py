@@ -415,6 +415,17 @@ def get_facts(input_str: str, k: int = 12, user_scope: Optional[str] = None) -> 
     use_global_cache = not normalized_scope or normalized_scope == _primary_user()
     fact_pool = memory if use_global_cache else _load_fact_records(_default_files_for_user(normalized_scope))
 
+    # Keep the curated TF-IDF pool aligned with in-memory facts when callers mutate
+    # `memory` directly in tests or ad hoc scripts.
+    if use_global_cache and memory:
+        curated_count = sum(
+            1
+            for fact in memory
+            if (fact.get("_meta") or {}).get("source_type", "imported_fact") in _INDEX_SOURCE_TYPES
+        )
+        if curated_count != len(_index_memory):
+            _rebuild_index_memory()
+
     # Path 1: OpenAI semantic embeddings
     if use_global_cache and CONFIG.get("embed_backend") == "openai":
         _ensure_openai_embeddings()

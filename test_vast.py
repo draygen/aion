@@ -5,6 +5,13 @@ import vast
 
 
 class TestVast(unittest.TestCase):
+    def setUp(self):
+        self._original_api_key = vast.CONFIG.get("vast_api_key")
+        vast.CONFIG["vast_api_key"] = "test-key"
+
+    def tearDown(self):
+        vast.CONFIG["vast_api_key"] = self._original_api_key
+
     @patch("vast.requests.get")
     def test_get_instance_extracts_nested_payload(self, mock_get):
         response = MagicMock()

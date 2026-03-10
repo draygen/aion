@@ -145,20 +145,34 @@ class OllamaEmbedder:
         try:
             import httpx
             prefixed = [f'{prefix}: {t}' for t in texts]
-            resp = httpx.post(
-                f'{base_url}/api/embed',
-                json={'model': model, 'input': prefixed},
-                timeout=30.0,
+            payloads = (
+                ('/api/embed', {'model': model, 'input': prefixed}, 'embeddings'),
+                ('/api/embeddings', {'model': model, 'prompt': prefixed[0] if len(prefixed) == 1 else prefixed}, 'embedding'),
+                ('/v1/embeddings', {'model': model, 'input': prefixed}, 'data'),
             )
-            resp.raise_for_status()
-            embeddings = resp.json().get('embeddings', [])
-            if not embeddings:
-                logger.warning("Ollama embed returned empty embeddings")
-                return None
-            vecs = np.array(embeddings, dtype=np.float32)
-            norms = np.linalg.norm(vecs, axis=1, keepdims=True)
-            norms[norms == 0] = 1
-            return (vecs / norms).astype(np.float32)
+            for path, payload, field in payloads:
+                resp = httpx.post(f'{base_url}{path}', json=payload, timeout=30.0)
+                if resp.status_code == 404:
+                    continue
+                resp.raise_for_status()
+                body = resp.json()
+                if field == 'embeddings':
+                    embeddings = body.get('embeddings', [])
+                elif field == 'embedding':
+                    raw = body.get('embedding')
+                    embeddings = [raw] if raw else []
+                else:
+                    data = body.get('data', [])
+                    embeddings = [item.get('embedding') for item in data if item.get('embedding')]
+                if not embeddings:
+                    logger.warning("Ollama embed returned empty embeddings")
+                    return None
+                vecs = np.array(embeddings, dtype=np.float32)
+                norms = np.linalg.norm(vecs, axis=1, keepdims=True)
+                norms[norms == 0] = 1
+                return (vecs / norms).astype(np.float32)
+            logger.warning("Ollama embedding endpoint not available on this server")
+            return None
         except Exception as e:
             logger.error(f"Ollama embedding failed: {e}")
             return None

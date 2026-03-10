@@ -13,9 +13,9 @@ echo "==> Fixing line endings..."
 find . -maxdepth 1 \( -name "*.py" -o -name "*.sh" -o -name "*.html" \) \
   -not -path './.venv*' | xargs sed -i 's/\r//'
 
-HOST="root@ssh9.vast.ai"
-SSH_PORT="38252"
-SSH_KEY="$HOME/.ssh/id_ed25519"
+HOST="${JARVIS_REMOTE_HOST:-root@ssh9.vast.ai}"
+SSH_PORT="${JARVIS_REMOTE_PORT:-38252}"
+SSH_KEY="${JARVIS_REMOTE_KEY:-$HOME/.ssh/id_ed25519}"
 SSH="ssh -o StrictHostKeyChecking=no -p $SSH_PORT -i $SSH_KEY"
 
 echo "==> Syncing code..."
@@ -29,6 +29,7 @@ rsync -az \
   --exclude='bin/' --exclude='lib/' --exclude='lib64' \
   --exclude='pyvenv.cfg' --exclude='*.mp3' \
   --exclude='cloudflared*' \
+  --exclude='config_local.py' \
   --exclude='ui/node_modules/' \
   --exclude='deploy.sh' \
   /mnt/c/jarvis/ $HOST:/workspace/jarvis/

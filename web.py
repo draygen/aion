@@ -129,7 +129,7 @@ def build_system_prompt(user_text: str, username: str = "brian") -> str:
     system = _SYSTEM_STATIC_HEADER + identity_line + "\n" + profile_section
 
     # Dynamic suffix — query-specific retrieved facts (changes per request, not cached)
-    facts = get_facts(user_text, k=10, user_scope=username)
+    facts = get_facts(user_text, k=15, user_scope=username)
     if facts:
         joined = "\n---\n".join(facts)
         system += f"\n## Relevant Memory for this query\n---\n{joined}\n---\n"
@@ -268,6 +268,14 @@ def generate_tts_audio(text: str) -> str:
 
 
 # ── Auth endpoints ──────────────────────────────────────────────────────────
+
+@app.route("/api/system/public/health")
+def api_system_public_health():
+    return jsonify({
+        "ok": True,
+        "service": "jarvis",
+        "time": _utc_now_iso(),
+    })
 
 @app.route("/api/login", methods=["POST"])
 def api_login():

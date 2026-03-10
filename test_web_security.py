@@ -57,6 +57,14 @@ class TestWebSecurity(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("categories", response.get_json())
 
+    def test_public_health_is_available_without_auth(self):
+        response = self.client.get("/api/system/public/health")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["service"], "jarvis")
+        self.assertIn("time", body)
+
     @patch("web.get_facts", return_value=["fact"])
     def test_build_system_prompt_scopes_memory_to_username(self, mock_get_facts):
         from web import build_system_prompt
