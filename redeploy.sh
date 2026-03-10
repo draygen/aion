@@ -4,9 +4,8 @@
 #
 # Usage: ./redeploy.sh
 #
-# Instance: A100 SXM4 40GB  |  $0.468/hr  |  id: 32361950
-# SSH:      ssh -p 11950 -i ~/.ssh/id_ed25519 root@ssh4.vast.ai
-# Web:      https://drayhub.org
+# Instance: RTX 5090 32GB  |  $0.2978/hr  |  id: 32638253
+# SSH:      ssh -p 38252 -i ~/.ssh/id_ed25519 root@ssh9.vast.ai
 
 set -e
 
@@ -14,8 +13,8 @@ echo "==> Fixing line endings..."
 find . -maxdepth 1 \( -name "*.py" -o -name "*.sh" -o -name "*.html" \) \
   -not -path './.venv*' | xargs sed -i 's/\r//'
 
-HOST="root@ssh4.vast.ai"
-SSH_PORT="11950"
+HOST="root@ssh9.vast.ai"
+SSH_PORT="38252"
 SSH_KEY="$HOME/.ssh/id_ed25519"
 SSH="ssh -o StrictHostKeyChecking=no -p $SSH_PORT -i $SSH_KEY"
 
@@ -49,4 +48,4 @@ sleep 3
 curl -s http://localhost:5000/ | grep -o "<title>[^<]*</title>"'
 
 echo "==> Done."
-echo "    Public: https://drayhub.org"
+echo "    SSH:    ssh -p $SSH_PORT -i $SSH_KEY $HOST"

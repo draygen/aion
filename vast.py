@@ -9,39 +9,44 @@ from config import CONFIG
 VAST_API_BASE = "https://console.vast.ai/api/v0"
 
 # Auto-deploy shell script. MODEL_NAME is substituted before use.
+# Base image: ollama/ollama (Ollama + CUDA pre-installed — skips 2-3 min of setup)
 _ONSTART_TEMPLATE = r"""#!/bin/bash
 exec >> /var/log/jarvis-setup.log 2>&1
 echo "[$(date)] === Jarvis Auto-Deploy Started ==="
 export DEBIAN_FRONTEND=noninteractive
 
-apt-get update -qq && apt-get install -y -qq curl python3-pip rsync git zstd
+# Minimal deps only (no Ollama install needed — already in base image)
+apt-get update -qq && apt-get install -y -qq python3-pip git rsync
 
-# Install Ollama
-curl -fsSL https://ollama.com/install.sh | sh
+# Ollama is pre-installed; just start it
 nohup ollama serve >> /var/log/ollama.log 2>&1 &
 
-# Wait for Ollama to be ready
-for i in $(seq 1 24); do
-    ollama list >/dev/null 2>&1 && break
-    echo "Waiting for Ollama ($i)..." && sleep 5
-done
-
-# Clone Jarvis
+# Clone Jarvis + kick off model pull in parallel with pip install
 mkdir -p /workspace
 git clone https://github.com/draygen/jarvis.git /workspace/jarvis
 cd /workspace/jarvis
 mkdir -p data
 
-# Python dependencies
+# Model pull and pip install run simultaneously
+nohup ollama pull MODEL_NAME >> /var/log/ollama.log 2>&1 &
+nohup ollama pull nomic-embed-text >> /var/log/ollama.log 2>&1 &
 pip3 install -q -r requirements.txt gunicorn
 
-# Pull LLM model in background (takes a while)
-nohup ollama pull MODEL_NAME >> /var/log/ollama.log 2>&1 &
+# Write remote config
+cat > /workspace/jarvis/config_local.py << 'LOCALCFG'
+CONFIG_LOCAL = {
+    "admin_password": "draygen2026",
+    "backend": "ollama",
+    "model": "MODEL_NAME",
+    "EMBEDDING_PROVIDER": "ollama",
+    "OLLAMA_EMBED_MODEL": "nomic-embed-text",
+}
+LOCALCFG
 
-# Start Jarvis on port 5000
+# Start Jarvis immediately — LLM requests queue until model finishes pulling
 nohup gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 web:app >> /var/log/jarvis.log 2>&1 &
 
-echo "[$(date)] === Jarvis running on :5000 ==="
+echo "[$(date)] === Jarvis running on :5000 (model still pulling in background) ==="
 """
 
 _JARVIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -147,7 +152,7 @@ def deploy_on_offer(offer_id: int, disk_gb: int = 40) -> dict:
     model = CONFIG.get("model", "qwen2.5:7b")
     script = _ONSTART_TEMPLATE.replace("MODEL_NAME", model)
     body = {
-        "image": "ubuntu:22.04",
+        "image": "ollama/ollama:latest",
         "disk": disk_gb,
         "runtype": "ssh_direct",
         "label": "jarvis",
