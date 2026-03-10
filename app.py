@@ -10,6 +10,14 @@ from commands import process_input, parse_command, help_text
 from brain import get_fact, get_facts, recall, load_facts, add_fact
 from llm import ask_llm
 
+# Memory / Goals (Phase 1 — optional, graceful fallback if not installed)
+try:
+    from memory_store import _save_memory, _search_memory, _get_recent_memories, _delete_memory
+    from goals_store import _create_goal, _list_goals, _update_goal
+    _MEMORY_AVAILABLE = True
+except ImportError:
+    _MEMORY_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,  # Default hides DEBUG
@@ -69,7 +77,17 @@ def build_prompt(user_text: str) -> str:
     else:
         context_block = ""
 
-    return f"{ctx_header}{context_block}User: {user_text}\nAssistant:"
+    # Inject semantic memories if available
+    mem_block = ""
+    if _MEMORY_AVAILABLE and CONFIG.get("memory_enabled", True):
+        try:
+            msg, ok = _search_memory(user_text, limit=5)
+            if ok and not msg.startswith("No memories found"):
+                mem_block = f"Remembered facts:\n{msg}\n\n"
+        except Exception:
+            pass
+
+    return f"{ctx_header}{context_block}{mem_block}User: {user_text}\nAssistant:"
 
 
 def handle_set(args: str) -> str:
@@ -147,6 +165,59 @@ def main() -> int:
                     print("Retrieved snippets (most relevant first):\n- " + "\n- ".join(_last_snippets))
                 else:
                     print("No snippets captured for the last query.")
+                continue
+            elif name in ("mem-save", "mem-search", "mem-recent", "mem-delete",
+                          "goals", "goal-add", "goal-done"):
+                if not _MEMORY_AVAILABLE:
+                    print("Memory/goals modules not available.")
+                    continue
+                if name == "mem-save":
+                    text = (args or "").strip()
+                    if not text:
+                        print("Usage: /mem <text>")
+                    else:
+                        msg, _ = _save_memory(text)
+                        print(msg)
+                elif name == "mem-search":
+                    query = (args or "").strip()
+                    if not query:
+                        print("Usage: /mem-search <query>")
+                    else:
+                        msg, _ = _search_memory(query, limit=10)
+                        print(msg)
+                elif name == "mem-recent":
+                    msg, _ = _get_recent_memories(count=10)
+                    print(msg)
+                elif name == "mem-delete":
+                    mid = (args or "").strip()
+                    if not mid:
+                        print("Usage: /mem-delete <id>")
+                    else:
+                        try:
+                            msg, _ = _delete_memory(int(mid))
+                            print(msg)
+                        except ValueError:
+                            print("ID must be a number.")
+                elif name == "goals":
+                    msg, _ = _list_goals(status="active")
+                    print(msg)
+                elif name == "goal-add":
+                    title = (args or "").strip()
+                    if not title:
+                        print("Usage: /goal-add <title>")
+                    else:
+                        msg, _ = _create_goal(title)
+                        print(msg)
+                elif name == "goal-done":
+                    gid = (args or "").strip()
+                    if not gid:
+                        print("Usage: /goal-done <id>")
+                    else:
+                        try:
+                            msg, _ = _update_goal(int(gid), status="completed")
+                            print(msg)
+                        except ValueError:
+                            print("ID must be a number.")
                 continue
             elif name == "tts":
                 CONFIG["TTS_ENABLED"] = not CONFIG.get("TTS_ENABLED", True)

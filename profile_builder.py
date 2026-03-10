@@ -47,10 +47,10 @@ def _load_source_facts() -> list[str]:
 
 
 def _build_with_gpt4o(facts: list[str]) -> str:
-    import openai
+    from llm import _get_openai_client
 
     facts_text = "\n\n".join(facts)
-    client = openai.OpenAI(api_key=CONFIG["openai_api_key"])
+    client = _get_openai_client()
     resp = client.chat.completions.create(
         model=CONFIG.get("openai_model", "gpt-4o"),
         messages=[

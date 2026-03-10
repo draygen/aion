@@ -3,6 +3,7 @@ import base64
 import io
 import json
 import re
+import urllib.request
 import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timezone
@@ -19,12 +20,20 @@ except ImportError:  # pragma: no cover - test/dev fallback when CORS extras are
 import auth
 import vast
 from auth import (
-    init_db, login_required, admin_required,
+    init_db, login_required, admin_required, vast_required,
     verify_login, create_token, delete_token,
     create_user, delete_user, get_db, get_user_by_token, change_password,
 )
 from brain import get_facts, add_fact
 from config import CONFIG
+
+# Memory / Goals (Phase 1 — optional, graceful fallback)
+try:
+    from memory_store import _save_memory, _search_memory
+    from goals_store import _list_goals
+    _MEMORY_AVAILABLE = True
+except ImportError:
+    _MEMORY_AVAILABLE = False
 from events import list_events, log_event
 from extractor import extract_and_save
 from llm import ask_llm_chat
@@ -124,6 +133,25 @@ def build_system_prompt(user_text: str, username: str = "brian") -> str:
     if facts:
         joined = "\n---\n".join(facts)
         system += f"\n## Relevant Memory for this query\n---\n{joined}\n---\n"
+
+    # Semantic memories from memory_store (Phase 1)
+    if _MEMORY_AVAILABLE and CONFIG.get("memory_enabled", True):
+        try:
+            msg, ok = _search_memory(user_text, limit=6)
+            if ok and not msg.startswith("No memories found"):
+                system += f"\n## Semantic Memories\n{msg}\n"
+        except Exception:
+            pass
+
+    # Active goals (Phase 1)
+    if _MEMORY_AVAILABLE and CONFIG.get("goals_enabled", True):
+        try:
+            msg, ok = _list_goals(status="active")
+            if ok and "No goals" not in msg:
+                system += f"\n## Brian's Active Goals\n{msg}\n"
+        except Exception:
+            pass
+
     return system
 
 
@@ -301,6 +329,87 @@ def api_whoami():
     })
 
 
+@app.route("/api/sso", methods=["POST"])
+def api_sso():
+    """Exchange a Drayhub SSO token for a Jarvis session cookie."""
+    data = request.get_json() or {}
+    sso_token = data.get("token", "").strip()
+    if not sso_token:
+        return jsonify({"error": "Missing token"}), 400
+
+    drayhub_api = CONFIG.get("drayhub_api", "http://127.0.0.1:8888")
+    try:
+        body = json.dumps({"token": sso_token, "service": "jarvis"}).encode()
+        req = urllib.request.Request(
+            f"{drayhub_api}/api/public/auth/sso-validate",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read().decode())
+    except Exception:
+        return jsonify({"error": "SSO validation failed"}), 502
+
+    if not result.get("valid"):
+        return jsonify({"error": "Invalid SSO token"}), 401
+
+    username = result.get("username", "").strip().lower()
+    roles = result.get("roles", [])
+    if not username:
+        return jsonify({"error": "No username in SSO response"}), 401
+
+    # Map drayhub roles to jarvis role
+    roles_lower = [r.lower() for r in roles]
+    if any(r in ("role_admin", "role_superuser") for r in roles_lower):
+        role = "admin"
+    elif "vast" in roles_lower:
+        role = "vast"
+    else:
+        role = "user"
+
+    # Find or create Jarvis user
+    import secrets as _secrets
+    db = get_db()
+    row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    db.close()
+
+    if row:
+        user_id = row["id"]
+    else:
+        dummy_pass = _secrets.token_hex(32)
+        user_id = create_user(username, dummy_pass, role=role, must_change_password=False)
+
+    token = create_token(user_id)
+    db = get_db()
+    user = dict(db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
+    db.close()
+
+    resp = make_response(jsonify({
+        "ok": True,
+        "username": user["username"],
+        "role": user["role"],
+    }))
+    resp.set_cookie(
+        "jarvis_token",
+        token,
+        max_age=86400 * 30,
+        samesite=CONFIG.get("cookie_samesite", "Lax"),
+        httponly=True,
+        secure=_should_use_secure_cookie(),
+    )
+    return resp
+
+
+@app.route("/api/admin/users")
+@admin_required
+def api_admin_list_users():
+    db = get_db()
+    rows = db.execute("SELECT id, username, role, must_change_password, created FROM users ORDER BY id").fetchall()
+    db.close()
+    return jsonify({"users": [dict(r) for r in rows]})
+
+
 @app.route("/api/admin/users", methods=["POST"])
 @admin_required
 def api_admin_create_user():
@@ -311,13 +420,51 @@ def api_admin_create_user():
     must_change_password = data.get("must_change_password", True)
     if not username or not password:
         return jsonify({"error": "Missing username or password"}), 400
-    if role not in ("user", "admin"):
+    if role not in ("user", "admin", "vast"):
         return jsonify({"error": "Invalid role"}), 400
     try:
         user_id = create_user(username, password, role, must_change_password=bool(must_change_password))
-        return jsonify({"ok": True, "id": user_id, "username": username, "must_change_password": bool(must_change_password)})
+        return jsonify({"ok": True, "id": user_id, "username": username, "role": role, "must_change_password": bool(must_change_password)})
     except Exception as e:
         return jsonify({"error": str(e)}), 409
+
+
+@app.route("/api/admin/users/<int:user_id>/role", methods=["PATCH"])
+@admin_required
+def api_admin_update_role(user_id):
+    data = request.get_json() or {}
+    role = data.get("role", "").strip()
+    if role not in ("user", "admin", "vast"):
+        return jsonify({"error": "Invalid role. Must be user, admin, or vast."}), 400
+    db = get_db()
+    row = db.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row:
+        db.close()
+        return jsonify({"error": "User not found"}), 404
+    db.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
+    db.commit()
+    db.close()
+    return jsonify({"ok": True, "id": user_id, "role": role})
+
+
+@app.route("/api/admin/users/<int:user_id>/reset-password", methods=["POST"])
+@admin_required
+def api_admin_reset_password(user_id):
+    data = request.get_json() or {}
+    new_password = data.get("password", "")
+    if len(new_password) < 10:
+        return jsonify({"error": "Password must be at least 10 characters."}), 400
+    import bcrypt as _bcrypt
+    pw_hash = _bcrypt.hashpw(new_password.encode(), _bcrypt.gensalt()).decode()
+    db = get_db()
+    row = db.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row:
+        db.close()
+        return jsonify({"error": "User not found"}), 404
+    db.execute("UPDATE users SET pw_hash = ?, must_change_password = 1 WHERE id = ?", (pw_hash, user_id))
+    db.commit()
+    db.close()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/admin/network/config")
@@ -717,7 +864,7 @@ def admin_panel():
 
 
 @app.route("/api/admin/vast/offers")
-@admin_required
+@vast_required
 def api_vast_offers():
     try:
         max_dph = request.args.get("max_dph")
@@ -736,7 +883,7 @@ def api_vast_offers():
 
 
 @app.route("/api/admin/vast/instances")
-@admin_required
+@vast_required
 def api_vast_instances():
     try:
         instances = vast.get_instances()
@@ -748,7 +895,7 @@ def api_vast_instances():
 
 
 @app.route("/api/admin/vast/instances/<int:instance_id>")
-@admin_required
+@vast_required
 def api_vast_instance(instance_id):
     try:
         instance = vast.get_instance(instance_id)
@@ -760,7 +907,7 @@ def api_vast_instance(instance_id):
 
 
 @app.route("/api/admin/vast/deploy", methods=["POST"])
-@admin_required
+@vast_required
 def api_vast_deploy():
     data = request.get_json() or {}
     offer_id = data.get("offer_id")
@@ -777,7 +924,7 @@ def api_vast_deploy():
 
 
 @app.route("/api/admin/vast/instances/<int:instance_id>/stop", methods=["POST"])
-@admin_required
+@vast_required
 def api_vast_stop(instance_id):
     try:
         result = vast.stop_instance(instance_id)
@@ -789,7 +936,7 @@ def api_vast_stop(instance_id):
 
 
 @app.route("/api/admin/vast/instances/<int:instance_id>/start", methods=["POST"])
-@admin_required
+@vast_required
 def api_vast_start(instance_id):
     try:
         result = vast.start_instance(instance_id)
@@ -801,7 +948,7 @@ def api_vast_start(instance_id):
 
 
 @app.route("/api/admin/vast/instances/<int:instance_id>/restart", methods=["POST"])
-@admin_required
+@vast_required
 def api_vast_restart(instance_id):
     try:
         result = vast.restart_instance(instance_id)
@@ -813,7 +960,7 @@ def api_vast_restart(instance_id):
 
 
 @app.route("/api/admin/vast/instances/<int:instance_id>", methods=["DELETE"])
-@admin_required
+@vast_required
 def api_vast_destroy(instance_id):
     try:
         result = vast.destroy_instance(instance_id)
@@ -825,7 +972,7 @@ def api_vast_destroy(instance_id):
 
 
 @app.route("/api/admin/vast/instances/<int:instance_id>/redeploy", methods=["POST"])
-@admin_required
+@vast_required
 def api_vast_redeploy(instance_id):
     data = request.get_json() or {}
     ssh_host = data.get("ssh_host")

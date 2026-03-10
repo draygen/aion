@@ -6,3 +6,8 @@ gTTS
 elevenlabs
 bcrypt
 pytest
+numpy
+httpx
+onnxruntime-gpu
+transformers
+huggingface_hub

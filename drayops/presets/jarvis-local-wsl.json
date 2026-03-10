@@ -1,0 +1,82 @@
+{
+  "id": "jarvis-local-wsl",
+  "name": "Jarvis Local (WSL)",
+  "project": "jarvis",
+  "target_type": "local",
+  "description": "Run the Jarvis web app locally inside WSL using the repo venv.",
+  "defaults": {
+    "project_path": "C:\\jarvis",
+    "run_in_wsl": true,
+    "wsl_distro": "",
+    "host": "127.0.0.1",
+    "port": "5000",
+    "pid_file": ".drayops/jarvis-web.pid",
+    "log_file": ".drayops/jarvis-web.log"
+  },
+  "config_fields": [
+    {
+      "name": "project_path",
+      "label": "Project Path",
+      "required": true,
+      "placeholder": "C:\\jarvis"
+    },
+    {
+      "name": "run_in_wsl",
+      "label": "Run In WSL",
+      "required": false,
+      "placeholder": "true"
+    },
+    {
+      "name": "wsl_distro",
+      "label": "WSL Distro",
+      "required": false,
+      "placeholder": "Optional distro name"
+    },
+    {
+      "name": "host",
+      "label": "Bind Host",
+      "required": false,
+      "placeholder": "127.0.0.1"
+    },
+    {
+      "name": "port",
+      "label": "Port",
+      "required": false,
+      "placeholder": "5000"
+    },
+    {
+      "name": "pid_file",
+      "label": "PID File",
+      "required": false,
+      "placeholder": ".drayops/jarvis-web.pid"
+    },
+    {
+      "name": "log_file",
+      "label": "Log File",
+      "required": false,
+      "placeholder": ".drayops/jarvis-web.log"
+    }
+  ],
+  "actions": {
+    "start": {
+      "command": "mkdir -p .drayops && PID_FILE=\"{{pid_file}}\" && LOG_FILE=\"{{log_file}}\" && if [ -f \"$PID_FILE\" ] && kill -0 \"$(cat \"$PID_FILE\")\" 2>/dev/null; then echo \"Jarvis already running with PID $(cat \"$PID_FILE\")\"; else env -u WERKZEUG_SERVER_FD -u WERKZEUG_RUN_MAIN -u FLASK_RUN_FROM_CLI setsid -f .venv/bin/python3 -c \"from web import app; app.run(host='{{host}}', port={{port}}, debug=False, use_reloader=False)\" >> \"$LOG_FILE\" 2>&1 < /dev/null && sleep 1 && pgrep -f \"app.run(host='{{host}}', port={{port}}\" | head -n 1 > \"$PID_FILE\" && echo \"Started Jarvis with PID $(cat \"$PID_FILE\") on http://{{host}}:{{port}}\"; fi",
+      "timeout": 30
+    },
+    "stop": {
+      "command": "PID_FILE=\"{{pid_file}}\" && if [ -f \"$PID_FILE\" ]; then kill \"$(cat \"$PID_FILE\")\" 2>/dev/null || true; rm -f \"$PID_FILE\"; echo \"Stopped Jarvis\"; else pkill -f \"app.run(host='{{host}}', port={{port}}\" >/dev/null 2>&1 || true; echo \"No PID file, attempted pkill\"; fi",
+      "timeout": 30
+    },
+    "restart": {
+      "command": "PID_FILE=\"{{pid_file}}\" && LOG_FILE=\"{{log_file}}\" && if [ -f \"$PID_FILE\" ]; then kill \"$(cat \"$PID_FILE\")\" 2>/dev/null || true; rm -f \"$PID_FILE\"; else pkill -f \"app.run(host='{{host}}', port={{port}}\" >/dev/null 2>&1 || true; fi && mkdir -p .drayops && env -u WERKZEUG_SERVER_FD -u WERKZEUG_RUN_MAIN -u FLASK_RUN_FROM_CLI setsid -f .venv/bin/python3 -c \"from web import app; app.run(host='{{host}}', port={{port}}, debug=False, use_reloader=False)\" >> \"$LOG_FILE\" 2>&1 < /dev/null && sleep 1 && pgrep -f \"app.run(host='{{host}}', port={{port}}\" | head -n 1 > \"$PID_FILE\" && echo \"Restarted Jarvis with PID $(cat \"$PID_FILE\") on http://{{host}}:{{port}}\"",
+      "timeout": 30
+    },
+    "health": {
+      "command": ".venv/bin/python3 -c \"import urllib.request; print(urllib.request.urlopen('http://{{host}}:{{port}}/', timeout=10).status)\"",
+      "timeout": 20
+    },
+    "test": {
+      "command": ".venv/bin/python3 -m pytest test_app.py test_brain.py test_extractor.py test_web_security.py",
+      "timeout": 180
+    }
+  }
+}

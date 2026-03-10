@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DrayOps</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0b1220;
+            --panel: #121b2d;
+            --panel-2: #0f1727;
+            --border: #233454;
+            --text: #eef4ff;
+            --muted: #9cb4d8;
+            --accent: #5aa0ff;
+            --danger: #bb4d4d;
+            --danger-2: #411d1d;
+            --ok: #1b7f5a;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Consolas, "SFMono-Regular", Menlo, monospace;
+            background:
+                radial-gradient(circle at top right, rgba(90, 160, 255, 0.16), transparent 24%),
+                linear-gradient(180deg, #0b1220 0%, #08101d 100%);
+            color: var(--text);
+        }
+
+        header {
+            padding: 22px 26px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(10, 18, 32, 0.88);
+            backdrop-filter: blur(8px);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 26px;
+            letter-spacing: 0.12em;
+        }
+
+        header p {
+            margin: 8px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: 320px 1fr 420px;
+            gap: 18px;
+            padding: 18px;
+            min-height: calc(100vh - 90px);
+        }
+
+        .panel {
+            background: linear-gradient(180deg, rgba(18, 27, 45, 0.96), rgba(11, 17, 29, 0.96));
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 16px;
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24);
+        }
+
+        .panel h2 {
+            margin: 0 0 14px;
+            font-size: 13px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
+        .stack {
+            display: grid;
+            gap: 12px;
+        }
+
+        .card {
+            background: var(--panel-2);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px;
+        }
+
+        .target-card {
+            cursor: pointer;
+        }
+
+        .target-card.active {
+            border-color: var(--accent);
+            box-shadow: inset 0 0 0 1px rgba(90, 160, 255, 0.25);
+        }
+
+        .row {
+            display: grid;
+            gap: 10px;
+        }
+
+        .row.two {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        input, select, textarea, button {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid #35527d;
+            background: #15233a;
+            color: var(--text);
+            padding: 10px 12px;
+            font: inherit;
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            background: linear-gradient(135deg, #2f6fdd, #5aa0ff);
+            color: white;
+            font-weight: 700;
+        }
+
+        button.secondary {
+            background: #1d2a43;
+            border: 1px solid #36537c;
+        }
+
+        button.danger {
+            background: linear-gradient(135deg, #8e3030, #c05252);
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .meta {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .empty {
+            color: var(--muted);
+            border: 1px dashed var(--border);
+            border-radius: 14px;
+            padding: 18px;
+            text-align: center;
+        }
+
+        .detail-grid {
+            display: grid;
+            gap: 14px;
+        }
+
+        .kv {
+            display: grid;
+            gap: 8px;
+        }
+
+        .kv-line {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .kv-line strong {
+            color: var(--muted);
+        }
+
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 65vh;
+            overflow: auto;
+            background: #09101c;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px;
+            font-size: 12px;
+        }
+
+        .job {
+            border-bottom: 1px solid rgba(35, 52, 84, 0.6);
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+        .job:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .job button {
+            margin-top: 8px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .status.completed {
+            background: rgba(27, 127, 90, 0.22);
+            color: #7ef0bc;
+        }
+
+        .status.failed {
+            background: rgba(187, 77, 77, 0.2);
+            color: #ffaaaa;
+        }
+
+        .notice {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(90, 160, 255, 0.12);
+            border: 1px solid rgba(90, 160, 255, 0.26);
+            color: #dce8ff;
+            font-size: 12px;
+        }
+
+        .danger-zone {
+            border: 1px solid rgba(187, 77, 77, 0.45);
+            background: rgba(65, 29, 29, 0.45);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>DRAYOPS</h1>
+        <p>Local and Vast control for Jarvis, Jarvis v2, and low-drama local apps.</p>
+    </header>
+    <main>
+        <section class="panel stack">
+            <div>
+                <h2>Create Target</h2>
+                <div class="row">
+                    <div>
+                        <label for="preset-select">Preset</label>
+                        <select id="preset-select"></select>
+                    </div>
+                    <div>
+                        <label for="target-name">Target Name</label>
+                        <input id="target-name" placeholder="Jarvis Prod or SyncForge Local">
+                    </div>
+                </div>
+                <div id="create-fields" class="stack" style="margin-top: 12px;"></div>
+                <button id="create-target">Add Target</button>
+                <div id="create-notice" class="notice" style="display:none;"></div>
+            </div>
+            <div>
+                <h2>Vast Search</h2>
+                <div class="row two">
+                    <div>
+                        <label for="max-dph">Max $/hr</label>
+                        <input id="max-dph" placeholder="0.5">
+                    </div>
+                    <div>
+                        <label for="min-gpu-ram">Min GPU RAM (GB)</label>
+                        <input id="min-gpu-ram" placeholder="16">
+                    </div>
+                </div>
+                <div class="row">
+                    <div>
+                        <label for="gpu-name">GPU Name</label>
+                        <input id="gpu-name" placeholder="4090 or A5000">
+                    </div>
+                </div>
+                <button id="search-vast" class="secondary">Search Vast Offers</button>
+                <div class="row two" style="margin-top: 12px;">
+                    <div>
+                        <label for="deploy-offer-id">Offer ID</label>
+                        <input id="deploy-offer-id" placeholder="22589934">
+                    </div>
+                    <div>
+                        <label for="deploy-disk-gb">Disk (GB)</label>
+                        <input id="deploy-disk-gb" placeholder="40" value="40">
+                    </div>
+                </div>
+                <button id="deploy-vast">Deploy Selected Offer</button>
+                <div id="deploy-notice" class="notice" style="display:none;"></div>
+                <pre id="vast-results">No search run yet.</pre>
+            </div>
+        </section>
+        <section class="panel">
+            <h2>Targets</h2>
+            <div id="targets" class="stack"></div>
+        </section>
+        <section class="panel stack">
+            <div>
+                <h2>Selected Target</h2>
+                <div id="target-detail" class="empty">Select a target to inspect and run actions.</div>
+            </div>
+            <div>
+                <h2>Jobs</h2>
+                <div id="jobs" class="stack"></div>
+            </div>
+        </section>
+    </main>
+    <script>
+        let presets = [];
+        let targets = [];
+        let jobs = [];
+        let selectedTargetId = null;
+
+        async function getJson(url, options) {
+            const response = await fetch(url, options);
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || "Request failed");
+            }
+            return data;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;");
+        }
+
+        function selectedPreset() {
+            const presetId = document.getElementById("preset-select").value;
+            return presets.find((preset) => preset.id === presetId);
+        }
+
+        function renderField(field, value = "", scope = "create") {
+            const inputId = `${scope}-${field.name}`;
+            return `
+                <div>
+                    <label for="${escapeHtml(inputId)}">${escapeHtml(field.label || field.name)}</label>
+                    <input id="${escapeHtml(inputId)}" data-field-name="${escapeHtml(field.name)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(field.placeholder || "")}">
+                </div>
+            `;
+        }
+
+        function renderCreateFields() {
+            const preset = selectedPreset();
+            const container = document.getElementById("create-fields");
+            if (!preset) {
+                container.innerHTML = "";
+                return;
+            }
+            const fields = preset.config_fields || [];
+            container.innerHTML = fields.map((field) => renderField(field, preset.defaults?.[field.name] || "", "create")).join("");
+        }
+
+        async function loadPresets() {
+            const data = await getJson("/api/presets");
+            presets = data.presets;
+            const select = document.getElementById("preset-select");
+            select.innerHTML = presets.map((preset) => `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name)}</option>`).join("");
+            renderCreateFields();
+        }
+
+        async function loadTargets() {
+            const data = await getJson("/api/targets");
+            targets = data.targets;
+            if (!selectedTargetId && targets.length) {
+                selectedTargetId = targets[0].id;
+            }
+            if (selectedTargetId && !targets.some((target) => target.id === selectedTargetId)) {
+                selectedTargetId = targets[0]?.id || null;
+            }
+            renderTargets();
+            renderSelectedTarget();
+        }
+
+        async function loadJobs() {
+            const data = await getJson("/api/jobs");
+            jobs = data.jobs;
+            renderJobs();
+        }
+
+        function renderTargets() {
+            const container = document.getElementById("targets");
+            if (!targets.length) {
+                container.innerHTML = '<div class="empty">No targets configured yet.</div>';
+                return;
+            }
+            container.innerHTML = targets.map((target) => {
+                const active = target.id === selectedTargetId ? "active" : "";
+                return `
+                    <div class="card target-card ${active}" onclick="selectTarget('${escapeHtml(target.id)}')">
+                        <strong>${escapeHtml(target.name)}</strong>
+                        <div class="meta">${escapeHtml(target.project)} | ${escapeHtml(target.target_type)}</div>
+                        <div class="meta">${escapeHtml(target.description || "")}</div>
+                    </div>
+                `;
+            }).join("");
+        }
+
+        function selectTarget(targetId) {
+            selectedTargetId = targetId;
+            renderTargets();
+            renderSelectedTarget();
+        }
+
+        function currentTarget() {
+            return targets.find((target) => target.id === selectedTargetId) || null;
+        }
+
+        function renderConfigFields(target) {
+            const fields = target.config_fields || [];
+            if (!fields.length) {
+                return "<div class=\"meta\">This target has no editable config fields.</div>";
+            }
+            return fields.map((field) => renderField(field, target.config?.[field.name] || "", `target-${target.id}`)).join("");
+        }
+
+        function renderActionPayloadFields(target, action) {
+            const fields = (target.action_fields || {})[action] || [];
+            if (!fields.length) {
+                return "";
+            }
+            return `
+                <div class="card">
+                    <div class="meta">Overrides for ${escapeHtml(action)}</div>
+                    <div class="stack" style="margin-top: 10px;">
+                        ${fields.map((field) => renderField(field, "", `action-${target.id}-${action}`)).join("")}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSelectedTarget() {
+            const target = currentTarget();
+            const container = document.getElementById("target-detail");
+            if (!target) {
+                container.className = "empty";
+                container.textContent = "Select a target to inspect and run actions.";
+                return;
+            }
+
+            const actions = Object.keys(target.actions || {});
+            const actionButtons = actions.map((action) => {
+                const danger = action === "destroy" ? "danger" : "secondary";
+                return `<button class="${danger}" onclick="runAction('${escapeHtml(target.id)}', '${escapeHtml(action)}')">${escapeHtml(action)}</button>`;
+            }).join("");
+
+            const actionPayloads = actions.map((action) => renderActionPayloadFields(target, action)).join("");
+            const configLines = Object.entries(target.config || {}).map(([key, value]) => `
+                <div class="kv-line">
+                    <strong>${escapeHtml(key)}</strong>
+                    <span>${escapeHtml(value)}</span>
+                </div>
+            `).join("");
+
+            container.className = "detail-grid";
+            container.innerHTML = `
+                <div class="card">
+                    <strong>${escapeHtml(target.name)}</strong>
+                    <div class="meta">${escapeHtml(target.project)} | ${escapeHtml(target.target_type)}</div>
+                    <div class="meta">Preset: ${escapeHtml(target.preset_id)}</div>
+                    <div class="meta">Updated: ${escapeHtml(target.updated_at)}</div>
+                </div>
+                <div class="card">
+                    <div class="kv">${configLines || '<div class="meta">No config stored.</div>'}</div>
+                </div>
+                <div class="card">
+                    <div class="row">
+                        <div>
+                            <label for="target-name-edit">Target Name</label>
+                            <input id="target-name-edit" value="${escapeHtml(target.name)}">
+                        </div>
+                    </div>
+                    <div class="stack" style="margin-top: 12px;">
+                        ${renderConfigFields(target)}
+                    </div>
+                    <div class="actions">
+                        <button onclick="saveTarget('${escapeHtml(target.id)}')">Save Target</button>
+                        <button class="danger" onclick="deleteTarget('${escapeHtml(target.id)}')">Delete Target</button>
+                    </div>
+                </div>
+                ${actionPayloads}
+                <div class="card ${actions.includes("destroy") ? "danger-zone" : ""}">
+                    <div class="meta">Actions run immediately. Destroy means destroy, not "maybe later."</div>
+                    <div class="actions">${actionButtons || '<div class="meta">No actions configured.</div>'}</div>
+                </div>
+            `;
+        }
+
+        function gatherFields(scopePrefix) {
+            const result = {};
+            document.querySelectorAll(`[id^="${scopePrefix}"]`).forEach((input) => {
+                if (!input.dataset || !input.dataset.fieldName || typeof input.value !== "string") {
+                    return;
+                }
+                result[input.dataset.fieldName] = input.value.trim();
+            });
+            return result;
+        }
+
+        async function createTarget() {
+            const preset = selectedPreset();
+            const notice = document.getElementById("create-notice");
+            try {
+                const overrides = gatherFields("create-");
+                const name = document.getElementById("target-name").value.trim();
+                if (name) {
+                    overrides.name = name;
+                }
+                await getJson("/api/targets", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        preset_id: preset.id,
+                        overrides
+                    })
+                });
+                notice.style.display = "block";
+                notice.textContent = `Created target from ${preset.name}.`;
+                document.getElementById("target-name").value = "";
+                renderCreateFields();
+                await Promise.all([loadTargets(), loadJobs()]);
+            } catch (error) {
+                notice.style.display = "block";
+                notice.textContent = error.message;
+            }
+        }
+
+        async function saveTarget(targetId) {
+            const target = targets.find((item) => item.id === targetId);
+            if (!target) {
+                return;
+            }
+            const config = gatherFields(`target-${targetId}-`);
+            const name = document.getElementById("target-name-edit").value.trim();
+            await getJson(`/api/targets/${targetId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, config })
+            });
+            await loadTargets();
+        }
+
+        async function deleteTarget(targetId) {
+            if (!confirm("Delete this target from DrayOps? This does not destroy a Vast instance by itself.")) {
+                return;
+            }
+            await getJson(`/api/targets/${targetId}`, { method: "DELETE" });
+            if (selectedTargetId === targetId) {
+                selectedTargetId = null;
+            }
+            await Promise.all([loadTargets(), loadJobs()]);
+        }
+
+        function gatherActionPayload(targetId, action) {
+            return gatherFields(`action-${targetId}-${action}-`);
+        }
+
+        async function runAction(targetId, action) {
+            const payload = gatherActionPayload(targetId, action);
+            await getJson(`/api/targets/${targetId}/actions/${action}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            await loadJobs();
+        }
+
+        function renderJobs() {
+            const container = document.getElementById("jobs");
+            if (!jobs.length) {
+                container.innerHTML = '<div class="empty">No jobs recorded yet.</div>';
+                return;
+            }
+            container.innerHTML = jobs.slice(0, 20).map((job, index) => `
+                <div class="job">
+                    <div>
+                        <strong>${escapeHtml(job.action)}</strong>
+                        <span class="status ${escapeHtml(job.status)}">${escapeHtml(job.status)}</span>
+                    </div>
+                    <div class="meta">Target: ${escapeHtml(job.target_id || "provider action")}</div>
+                    <div class="meta">${escapeHtml(job.created_at)}</div>
+                    <div class="meta">${escapeHtml(job.summary || "")}</div>
+                    <button class="secondary" onclick="showJobByIndex(${index})">Show Details</button>
+                </div>
+            `).join("");
+        }
+
+        function showJobByIndex(index) {
+            const job = jobs[index];
+            if (!job) {
+                return;
+            }
+            alert(JSON.stringify(job.details, null, 2));
+        }
+
+        async function searchVast() {
+            const params = new URLSearchParams();
+            const maxDph = document.getElementById("max-dph").value.trim();
+            const minGpuRam = document.getElementById("min-gpu-ram").value.trim();
+            const gpuName = document.getElementById("gpu-name").value.trim();
+            if (maxDph) params.set("max_dph", maxDph);
+            if (minGpuRam) params.set("min_gpu_ram", minGpuRam);
+            if (gpuName) params.set("gpu_name", gpuName);
+            const data = await getJson(`/api/vast/offers?${params.toString()}`);
+            document.getElementById("vast-results").textContent = JSON.stringify(data.offers.slice(0, 12), null, 2);
+        }
+
+        async function deployVastOffer() {
+            const preset = selectedPreset();
+            const offerId = document.getElementById("deploy-offer-id").value.trim();
+            const diskGb = document.getElementById("deploy-disk-gb").value.trim() || "40";
+            const notice = document.getElementById("deploy-notice");
+            if (!offerId) {
+                notice.style.display = "block";
+                notice.textContent = "Offer ID is required.";
+                return;
+            }
+            const data = await getJson("/api/vast/deploy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    preset_id: preset.id,
+                    offer_id: offerId,
+                    disk_gb: diskGb,
+                })
+            });
+            notice.style.display = "block";
+            notice.textContent = data.target
+                ? `Deployed ${preset.name} to instance ${data.target.config.instance_id}.`
+                : `Deployment requested for offer ${offerId}.`;
+            document.getElementById("deploy-offer-id").value = "";
+            await Promise.all([loadTargets(), loadJobs()]);
+        }
+
+        document.getElementById("preset-select").addEventListener("change", renderCreateFields);
+        document.getElementById("create-target").addEventListener("click", createTarget);
+        document.getElementById("search-vast").addEventListener("click", searchVast);
+        document.getElementById("deploy-vast").addEventListener("click", deployVastOffer);
+
+        Promise.all([loadPresets(), loadTargets(), loadJobs()]);
+    </script>
+</body>
+</html>

@@ -432,6 +432,57 @@
 </header>
 
 <main>
+    <!-- ── User Management ─────────────────────────────────── -->
+    <section id="users-section">
+        <div class="section-title">User Management</div>
+
+        <!-- Create user form -->
+        <div class="ops-panel" style="margin-bottom:1rem">
+            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end">
+                <div class="filter-group">
+                    <label>Username</label>
+                    <input type="text" id="new-username" placeholder="username" style="width:140px">
+                </div>
+                <div class="filter-group">
+                    <label>Password</label>
+                    <input type="password" id="new-password" placeholder="min 10 chars" style="width:160px">
+                </div>
+                <div class="filter-group">
+                    <label>Role</label>
+                    <select id="new-role" style="padding:0.45rem 0.75rem;background:#1a1a2e;border:1px solid #0f3460;border-radius:0.4rem;color:#eee;font-size:0.9rem;outline:none">
+                        <option value="user">user</option>
+                        <option value="vast">vast</option>
+                        <option value="admin">admin</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>&nbsp;</label>
+                    <button class="btn btn-primary" onclick="createUser()">Add User</button>
+                </div>
+                <div id="create-user-msg" style="font-size:0.82rem;align-self:center"></div>
+            </div>
+        </div>
+
+        <!-- Users table -->
+        <div style="overflow-x:auto">
+            <table id="users-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Must Change PW</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="users-body">
+                    <tr><td colspan="6" style="text-align:center;color:#555;padding:1.5rem">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
     <section>
         <div class="section-title">Instances</div>
         <div class="instance-grid" id="instances-list">
@@ -543,6 +594,113 @@
 <script>
     let pendingOffer = null;
     let opsConfig = null;
+
+    // ── User Management ───────────────────────────────────────────────
+    async function loadUsers() {
+        const tbody = document.getElementById('users-body');
+        try {
+            const r = await fetch('/api/admin/users', { credentials: 'include' });
+            const data = await r.json();
+            if (!r.ok) { tbody.innerHTML = `<tr><td colspan="6" style="color:#f44336;padding:1rem">${data.error}</td></tr>`; return; }
+            renderUsers(data.users || []);
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="6" style="color:#f44336;padding:1rem">Error: ${e.message}</td></tr>`;
+        }
+    }
+
+    function renderUsers(users) {
+        const tbody = document.getElementById('users-body');
+        if (!users.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#555;padding:1.5rem">No users.</td></tr>'; return; }
+        tbody.innerHTML = users.map(u => {
+            const mustChange = u.must_change_password ? '<span style="color:#ff9800">Yes</span>' : 'No';
+            const created = u.created ? new Date(u.created).toLocaleDateString() : '—';
+            const roleSel = ['user','vast','admin'].map(r =>
+                `<option value="${r}"${u.role===r?' selected':''}>${r}</option>`).join('');
+            return `<tr id="user-row-${u.id}">
+                <td style="color:#888">${u.id}</td>
+                <td style="font-weight:600">${esc(u.username)}</td>
+                <td>
+                    <select onchange="updateRole(${u.id},this.value)"
+                        style="padding:0.3rem 0.5rem;background:#1a1a2e;border:1px solid #0f3460;border-radius:0.4rem;color:#eee;font-size:0.82rem;outline:none">
+                        ${roleSel}
+                    </select>
+                </td>
+                <td>${mustChange}</td>
+                <td style="color:#888;font-size:0.8rem">${created}</td>
+                <td>
+                    <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
+                        <button class="btn btn-warn" onclick="resetPassword(${u.id},'${esc(u.username)}')">Reset PW</button>
+                        <button class="btn btn-danger" onclick="deleteUser(${u.id},'${esc(u.username)}')">Delete</button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    async function createUser() {
+        const username = document.getElementById('new-username').value.trim();
+        const password = document.getElementById('new-password').value;
+        const role     = document.getElementById('new-role').value;
+        const msg      = document.getElementById('create-user-msg');
+        msg.textContent = '';
+        if (!username || !password) { msg.style.color='#f44336'; msg.textContent='Username and password required.'; return; }
+        try {
+            const r = await fetch('/api/admin/users', {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, role, must_change_password: true }),
+            });
+            const data = await r.json();
+            if (r.ok) {
+                msg.style.color='#4caf50'; msg.textContent=`Created: ${data.username}`;
+                document.getElementById('new-username').value='';
+                document.getElementById('new-password').value='';
+                loadUsers();
+            } else {
+                msg.style.color='#f44336'; msg.textContent=data.error||'Error';
+            }
+        } catch(e) { msg.style.color='#f44336'; msg.textContent=e.message; }
+    }
+
+    async function updateRole(id, role) {
+        try {
+            const r = await fetch(`/api/admin/users/${id}/role`, {
+                method: 'PATCH', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role }),
+            });
+            const data = await r.json();
+            if (r.ok) toast(`Role updated to ${role}`, 'ok');
+            else toast(data.error || 'Error', 'err');
+        } catch(e) { toast(e.message, 'err'); }
+    }
+
+    async function resetPassword(id, username) {
+        const pw = prompt(`New password for ${username} (min 10 chars):`);
+        if (!pw) return;
+        try {
+            const r = await fetch(`/api/admin/users/${id}/reset-password`, {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pw }),
+            });
+            const data = await r.json();
+            if (r.ok) toast('Password reset. User must change on next login.', 'ok');
+            else toast(data.error || 'Error', 'err');
+        } catch(e) { toast(e.message, 'err'); }
+    }
+
+    async function deleteUser(id, username) {
+        if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+        try {
+            const r = await fetch(`/api/admin/users/${id}`, { method: 'DELETE', credentials: 'include' });
+            const data = await r.json();
+            if (r.ok) { toast(`Deleted ${username}`, 'ok'); loadUsers(); }
+            else toast(data.error || 'Error', 'err');
+        } catch(e) { toast(e.message, 'err'); }
+    }
+
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     function fmt(v, unit='') { return v != null ? `${v}${unit}` : '-'; }
     function fmtGb(mb) { return mb ? `${(mb / 1024).toFixed(0)} GB` : '-'; }
@@ -950,6 +1108,7 @@
     }
 
     function refreshAll() {
+        loadUsers();
         loadInstances();
         loadOpsConfig();
     }
@@ -962,7 +1121,7 @@
 
     (async () => {
         if (!await checkAdmin()) return;
-        await Promise.all([checkApiStatus(), loadInstances(), loadOpsConfig()]);
+        await Promise.all([checkApiStatus(), loadUsers(), loadInstances(), loadOpsConfig()]);
         searchOffers();
     })();
 </script>

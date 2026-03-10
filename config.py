@@ -54,6 +54,13 @@ CONFIG = {
     "TTS_ENABLED": False,
     "VOICE_MODE": False,
     "whisper_model": "base",
+    # Memory / Goals (Phase 1 — Sapphire port)
+    "EMBEDDING_PROVIDER": "null",   # null | local | api
+    "EMBEDDING_API_URL": "",        # remote OpenAI-compatible embeddings endpoint
+    "EMBEDDING_API_KEY": "",
+    "USER_TIMEZONE": "America/New_York",
+    "memory_enabled": True,
+    "goals_enabled": True,
 }
 
 # Load local overrides (API keys, passwords — never committed to git)

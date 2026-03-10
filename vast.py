@@ -33,7 +33,7 @@ cd /workspace/jarvis
 mkdir -p data
 
 # Python dependencies
-pip3 install -q flask flask-cors scikit-learn gtts elevenlabs requests gunicorn beautifulsoup4 bcrypt
+pip3 install -q -r requirements.txt gunicorn
 
 # Pull LLM model in background (takes a while)
 nohup ollama pull MODEL_NAME >> /var/log/ollama.log 2>&1 &

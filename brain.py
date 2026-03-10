@@ -2,19 +2,33 @@ import hashlib
 import json
 import os
 import pickle
-from typing import List, Dict, Any, Optional
+import threading
+import time
+from typing import List, Dict, Any, Optional, Tuple
 
 from config import CONFIG
 
 memory: List[Dict[str, Any]] = []
 
-# TF-IDF cache
+# Curated index: curated_fact, qa_pair, manual_learned, imported_fact (NOT verbatim_message).
+# Only this smaller pool is fed into TF-IDF — verbatim messages inflate the matrix
+# from ~2K to ~28K docs (25× larger), causing a 2-second build on every invalidation.
+_INDEX_SOURCE_TYPES = {"curated_fact", "qa_pair", "manual_learned", "imported_fact"}
+_index_memory: List[Dict[str, Any]] = []   # subset of memory used for TF-IDF
+_index_lock = threading.Lock()             # guards TF-IDF build
+
+# TF-IDF cache (built over _index_memory only)
 _tfidf_vectorizer = None
 _tfidf_matrix = None
 
 # OpenAI embedding cache
 _embed_vectors = None  # np.ndarray shape (N, dims) once built
 _EMBED_CACHE_PATH = "data/embeddings_cache.pkl"
+
+# Query-level caches (avoids repeat embeddings API calls)
+_QUERY_VECTOR_CACHE: Dict[str, Any] = {}          # query_hash → np.ndarray
+_FACTS_RESULT_CACHE: Dict[str, Tuple[List[str], float]] = {}  # cache_key → (results, ts)
+_FACTS_CACHE_TTL: int = 600  # seconds (10 min)
 
 
 def _shared_facts_path() -> str:
@@ -238,6 +252,19 @@ def _ensure_openai_embeddings() -> None:
         _embed_vectors = None
 
 
+def _rebuild_index_memory() -> None:
+    """Rebuild _index_memory from memory (curated facts only, no verbatim messages)."""
+    global _index_memory, _tfidf_vectorizer, _tfidf_matrix
+    with _index_lock:
+        _index_memory = [
+            f for f in memory
+            if (f.get("_meta") or {}).get("source_type", "imported_fact")
+            in _INDEX_SOURCE_TYPES
+        ]
+        _tfidf_vectorizer = None
+        _tfidf_matrix = None
+
+
 def load_facts(files: List[str] = None, user_scope: Optional[str] = None) -> int:
     """Load facts into memory. Returns count loaded into active retrieval memory."""
     global memory, _tfidf_vectorizer, _tfidf_matrix, _embed_vectors
@@ -250,6 +277,10 @@ def load_facts(files: List[str] = None, user_scope: Optional[str] = None) -> int
         files = _default_files_for_user(user_scope or _primary_user())
 
     memory.extend(_load_fact_records(files))
+    _rebuild_index_memory()
+
+    # Pre-warm TF-IDF in background so first request doesn't stall.
+    threading.Thread(target=_ensure_tfidf, daemon=True, name="tfidf-warmup").start()
     return len(memory)
 
 
@@ -297,9 +328,8 @@ def add_fact(
 
     if meta.get("status", "active") == "active" and (not owner or owner == _primary_user()):
         memory.insert(0, fact)
-        _tfidf_vectorizer = None
-        _tfidf_matrix = None
         globals()["_embed_vectors"] = None
+        _rebuild_index_memory()  # re-filters curated pool and clears TF-IDF
     try:
         _append_jsonl(path, fact)
     except Exception as e:
@@ -319,30 +349,33 @@ def _score(a: str, b: str) -> int:
 
 
 def _ensure_tfidf():
-    """Build TF-IDF matrix for current memory if configured and available."""
+    """Build TF-IDF matrix over curated _index_memory only (not verbatim messages)."""
     global _tfidf_vectorizer, _tfidf_matrix
     if CONFIG.get("retrieval", "embed") != "embed":
         return
-    if _tfidf_vectorizer is not None and _tfidf_matrix is not None:
-        return
-    try:
-        from sklearn.feature_extraction.text import TfidfVectorizer
-
-        texts = []
-        for fact in memory:
-            inp = fact.get("input") or ""
-            out = fact.get("output") or ""
-            combined = (inp + " \n " + out).strip()
-            texts.append(combined)
-        if not texts:
+    with _index_lock:
+        if _tfidf_vectorizer is not None and _tfidf_matrix is not None:
             return
-        _tfidf_vectorizer = TfidfVectorizer(max_features=80000, ngram_range=(1, 2))
-        _tfidf_matrix = _tfidf_vectorizer.fit_transform(texts)
-        print(f"[brain.py] TF-IDF index ready for {len(texts)} facts.")
-    except Exception as e:
-        print(f"[brain.py] TF-IDF unavailable, falling back to lexical: {e}")
-        _tfidf_vectorizer = None
-        _tfidf_matrix = None
+        try:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+
+            texts = []
+            for fact in _index_memory:
+                inp = fact.get("input") or ""
+                out = fact.get("output") or ""
+                combined = (inp + " \n " + out).strip()
+                texts.append(combined)
+            if not texts:
+                return
+            # 10K features is ample for ~2K curated docs; was 80K causing 2s build
+            _tfidf_vectorizer = TfidfVectorizer(max_features=10000, ngram_range=(1, 2))
+            _tfidf_matrix = _tfidf_vectorizer.fit_transform(texts)
+            print(f"[brain.py] TF-IDF index ready — {len(texts)} curated facts "
+                  f"(skipped {len(memory) - len(texts)} verbatim messages).")
+        except Exception as e:
+            print(f"[brain.py] TF-IDF unavailable, falling back to lexical: {e}")
+            _tfidf_vectorizer = None
+            _tfidf_matrix = None
 
 
 def _format_snippet(fact: Dict[str, Any], max_len: int = 280) -> str:
@@ -358,8 +391,26 @@ def _format_snippet(fact: Dict[str, Any], max_len: int = 280) -> str:
     return s
 
 
+def _query_hash(input_str: str, k: int, user_scope: Optional[str]) -> str:
+    key = f"{input_str.strip().lower()}|{k}|{user_scope or ''}"
+    return hashlib.md5(key.encode("utf-8")).hexdigest()
+
+
 def get_facts(input_str: str, k: int = 12, user_scope: Optional[str] = None) -> List[str]:
-    """Return up to k relevant snippets. Prefer TF-IDF if enabled and available."""
+    """Return up to k relevant snippets. Prefer OpenAI embeddings, then TF-IDF, then lexical.
+
+    Results are cached in memory for _FACTS_CACHE_TTL seconds to avoid redundant
+    embedding API calls for identical or near-identical queries.
+    """
+    # Check full-result cache first
+    cache_key = _query_hash(input_str, k, user_scope)
+    cached = _FACTS_RESULT_CACHE.get(cache_key)
+    if cached is not None:
+        results, ts = cached
+        if time.time() - ts < _FACTS_CACHE_TTL:
+            return results
+        del _FACTS_RESULT_CACHE[cache_key]
+
     normalized_scope = _normalize_user_scope(user_scope)
     use_global_cache = not normalized_scope or normalized_scope == _primary_user()
     fact_pool = memory if use_global_cache else _load_fact_records(_default_files_for_user(normalized_scope))
@@ -373,9 +424,17 @@ def get_facts(input_str: str, k: int = 12, user_scope: Optional[str] = None) -> 
                 import openai
 
                 embed_model = CONFIG.get("openai_embed_model", "text-embedding-3-small")
-                client = openai.OpenAI(api_key=CONFIG["openai_api_key"])
-                resp = client.embeddings.create(model=embed_model, input=[input_str])
-                q_vec = np.array(resp.data[0].embedding, dtype=np.float32)
+
+                # Cache the query vector itself to avoid repeat embedding API calls
+                q_hash = hashlib.md5(input_str.strip().lower().encode()).hexdigest()
+                if q_hash in _QUERY_VECTOR_CACHE:
+                    q_vec = _QUERY_VECTOR_CACHE[q_hash]
+                else:
+                    client = openai.OpenAI(api_key=CONFIG["openai_api_key"])
+                    resp = client.embeddings.create(model=embed_model, input=[input_str])
+                    q_vec = np.array(resp.data[0].embedding, dtype=np.float32)
+                    _QUERY_VECTOR_CACHE[q_hash] = q_vec
+
                 norms = np.linalg.norm(_embed_vectors, axis=1)
                 q_norm = np.linalg.norm(q_vec)
                 sims = (_embed_vectors @ q_vec) / (norms * q_norm + 1e-9)
@@ -393,26 +452,38 @@ def get_facts(input_str: str, k: int = 12, user_scope: Optional[str] = None) -> 
                     if len(results) >= k:
                         break
                 if results:
+                    _FACTS_RESULT_CACHE[cache_key] = (results, time.time())
                     return results
             except Exception as e:
                 print(f"[brain] OpenAI embedding query failed, falling back: {e}")
 
-    # Path 2: TF-IDF
+    # Path 2: TF-IDF (queries over _index_memory — curated facts only)
     if use_global_cache:
         _ensure_tfidf()
     if use_global_cache and _tfidf_vectorizer is not None and _tfidf_matrix is not None:
         try:
-            q = _tfidf_vectorizer.transform([input_str])
+            import numpy as np
             from sklearn.metrics.pairwise import cosine_similarity
 
+            q = _tfidf_vectorizer.transform([input_str])
             sims = cosine_similarity(q, _tfidf_matrix).ravel()
-            ranked = sorted(enumerate(sims), key=lambda t: t[1], reverse=True)
+
+            # Use argpartition for O(n) top-k selection instead of O(n log n) full sort
+            n = len(sims)
+            top_k = min(k * 3, n)
+            if top_k < n:
+                top_idx = np.argpartition(sims, -top_k)[-top_k:]
+                top_idx = top_idx[np.argsort(sims[top_idx])[::-1]]
+            else:
+                top_idx = np.argsort(sims)[::-1]
+
             results: List[str] = []
             seen = set()
-            for idx, score in ranked[: k * 3]:
+            for idx in top_idx:
+                score = sims[idx]
                 if score <= 0:
                     continue
-                snip = _format_snippet(memory[idx])
+                snip = _format_snippet(_index_memory[idx])
                 if not snip or snip in seen:
                     continue
                 seen.add(snip)
@@ -420,6 +491,7 @@ def get_facts(input_str: str, k: int = 12, user_scope: Optional[str] = None) -> 
                 if len(results) >= k:
                     break
             if results:
+                _FACTS_RESULT_CACHE[cache_key] = (results, time.time())
                 return results
         except Exception as e:
             print(f"[brain.py] TF-IDF query failed, falling back to lexical: {e}")
@@ -434,7 +506,10 @@ def get_facts(input_str: str, k: int = 12, user_scope: Optional[str] = None) -> 
             continue
         scored.append((_score(input_str, source + " " + out), _format_snippet(fact)))
     scored.sort(key=lambda t: t[0], reverse=True)
-    return [snip for score, snip in scored[:k] if score > 0]
+    results = [snip for score, snip in scored[:k] if score > 0]
+    if results:
+        _FACTS_RESULT_CACHE[cache_key] = (results, time.time())
+    return results
 
 
 def get_fact(input_str: str, user_scope: Optional[str] = None):

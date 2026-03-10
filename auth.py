@@ -304,3 +304,22 @@ def admin_required(f):
         g.user = user
         return f(*args, **kwargs)
     return decorated
+
+
+def vast_required(f):
+    """Allow access to users with 'admin' or 'vast' role."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.cookies.get("jarvis_token")
+        if not token:
+            return jsonify({"error": "Unauthorized", "login_required": True}), 401
+        user = get_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Unauthorized", "login_required": True}), 401
+        if user.get("must_change_password") and request.path not in PASSWORD_CHANGE_ALLOWED_PATHS:
+            return jsonify({"error": "Password change required", "requires_password_change": True}), 403
+        if user["role"] not in ("admin", "vast"):
+            return jsonify({"error": "Forbidden"}), 403
+        g.user = user
+        return f(*args, **kwargs)
+    return decorated

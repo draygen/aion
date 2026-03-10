@@ -2,17 +2,41 @@ import requests
 
 from config import CONFIG
 
+# Singleton OpenAI client — avoids re-instantiating (connection pool setup) on every request.
+_openai_client = None
+
+
+def _get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        try:
+            import openai
+            api_key = CONFIG.get("openai_api_key")
+            if not api_key or api_key.startswith("sk-xxxx"):
+                raise RuntimeError("OpenAI API key not configured.")
+            _openai_client = openai.OpenAI(api_key=api_key)
+        except ImportError as e:
+            raise RuntimeError("openai package not installed.") from e
+    return _openai_client
+
 
 def ask_llm_chat(messages: list) -> str:
-    """Send a multi-turn conversation to the LLM. messages is a list of
-    {role, content} dicts (system, user, assistant).
+    """Send a multi-turn conversation to the LLM.
 
-    If backend is 'openai', tries OpenAI first and falls back to Ollama on failure.
-    If backend is 'ollama', uses Ollama only.
+    Routing:
+      backend=ollama  → local Ollama (GPU), falls back to OpenAI on failure
+      backend=openai  → OpenAI API, falls back to Ollama on failure
     """
     backend = CONFIG.get('backend', 'ollama')
     if backend == 'ollama':
-        return _ollama_chat(messages)
+        try:
+            return _ollama_chat(messages)
+        except Exception as e:
+            openai_key = CONFIG.get("openai_api_key", "")
+            if openai_key and not openai_key.startswith("sk-xxxx"):
+                print(f"[llm] Ollama failed ({e}), falling back to OpenAI.")
+                return _openai_chat(messages)
+            raise
     elif backend == 'openai':
         try:
             return _openai_chat(messages)
@@ -29,11 +53,12 @@ def ask_llm(prompt: str) -> str:
 
 
 def _ollama_chat(messages: list) -> str:
+    model = CONFIG.get('model', 'mistral')
     try:
         resp = requests.post(
             "http://localhost:11434/api/chat",
             json={
-                "model": CONFIG.get('model', 'mistral'),
+                "model": model,
                 "messages": messages,
                 "stream": False,
             },
@@ -44,20 +69,11 @@ def _ollama_chat(messages: list) -> str:
     except requests.exceptions.ConnectionError:
         raise RuntimeError("Ollama not running. Start with: ollama serve")
     except Exception as e:
-        raise RuntimeError(f"Ollama error: {e}")
+        raise RuntimeError(f"Ollama error ({model}): {e}")
 
 
 def _openai_chat(messages: list) -> str:
-    try:
-        import openai
-    except ImportError as e:
-        raise RuntimeError("openai package not installed.") from e
-
-    api_key = CONFIG.get('openai_api_key')
-    if not api_key or api_key.startswith('sk-xxxx'):
-        raise RuntimeError("OpenAI API key not configured in config.py.")
-
-    client = openai.OpenAI(api_key=api_key)
+    client = _get_openai_client()
     response = client.chat.completions.create(
         model=CONFIG.get("openai_model", "gpt-4o"),
         messages=messages,

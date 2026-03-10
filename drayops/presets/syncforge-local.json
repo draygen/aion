@@ -1,0 +1,50 @@
+{
+  "id": "syncforge-local",
+  "name": "SyncForge Local",
+  "project": "merge_syncforge",
+  "target_type": "local",
+  "description": "Local SyncForge/file-transfer control target.",
+  "defaults": {
+    "project_path": "C:\\projects\\merge_syncforge",
+    "run_in_wsl": true,
+    "wsl_distro": ""
+  },
+  "config_fields": [
+    {
+      "name": "project_path",
+      "label": "Project Path",
+      "required": true,
+      "placeholder": "C:\\projects\\merge_syncforge"
+    },
+    {
+      "name": "run_in_wsl",
+      "label": "Run In WSL",
+      "required": false,
+      "placeholder": "true"
+    },
+    {
+      "name": "wsl_distro",
+      "label": "WSL Distro",
+      "required": false,
+      "placeholder": "Optional distro name"
+    }
+  ],
+  "actions": {
+    "start": {
+      "command": "cd mft-server && docker compose up -d",
+      "timeout": 900
+    },
+    "stop": {
+      "command": "cd mft-server && docker compose down",
+      "timeout": 900
+    },
+    "restart": {
+      "command": "cd mft-server && docker compose down && docker compose up -d",
+      "timeout": 1200
+    },
+    "deploy": {
+      "command": "bash deploy.sh",
+      "timeout": 1800
+    }
+  }
+}
