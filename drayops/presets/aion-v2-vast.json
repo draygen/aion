@@ -1,0 +1,47 @@
+{
+  "id": "aion-v2-vast",
+  "name": "Aion v2 on Vast",
+  "project": "aion_v2",
+  "target_type": "vast",
+  "description": "Aion v2 production-style Vast target.",
+  "defaults": {
+    "instance_id": "",
+    "ssh_host": "",
+    "ssh_port": "",
+    "repo_path": "C:\\aion_v2"
+  },
+  "config_fields": [
+    {
+      "name": "instance_id",
+      "label": "Vast Instance ID",
+      "required": true,
+      "placeholder": "12345678"
+    },
+    {
+      "name": "ssh_host",
+      "label": "SSH Host",
+      "required": false,
+      "placeholder": "ssh4.vast.ai"
+    },
+    {
+      "name": "ssh_port",
+      "label": "SSH Port",
+      "required": false,
+      "placeholder": "32455"
+    },
+    {
+      "name": "repo_path",
+      "label": "Repo Path",
+      "required": true,
+      "placeholder": "C:\\aion_v2"
+    }
+  ],
+  "actions": {
+    "sync": {},
+    "connect": {},
+    "start": {},
+    "stop": {},
+    "restart": {},
+    "destroy": {}
+  }
+}

@@ -1,13 +1,13 @@
 import json
 import os
-os.environ["HF_HOME"] = r"C:\jarvis\hf_cache"
+os.environ["HF_HOME"] = r"C:\aion\hf_cache"
 import random
 from datasets import load_dataset
 
 
 # --- SETTINGS ---
-YOUR_QA_FILE = r"C:\jarvis\data\brian_facts.jsonl"
-MERGED_FILE = r"C:\jarvis\data\mega_qa.jsonl"
+YOUR_QA_FILE = r"C:\aion\data\brian_facts.jsonl"
+MERGED_FILE = r"C:\aion\data\mega_qa.jsonl"
 
 def download_openhermes():
     print("Loading OpenHermes dataset from Hugging Face...")
@@ -52,7 +52,7 @@ def merge_jsonl_files(files, out_path, shuffle=True):
     print(f"Merged file saved to: {out_path}")
 
 def main():
-    tmp_hermes_clean = r"C:\jarvis\data\openhermes_clean.jsonl"
+    tmp_hermes_clean = r"C:\aion\data\openhermes_clean.jsonl"
     # Step 1: Download OpenHermes dataset
     dataset = download_openhermes()
     # Step 2: Convert to your Q/A format

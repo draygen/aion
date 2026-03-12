@@ -1,4 +1,4 @@
-"""Authentication, SQLite sessions, and decorators for Jarvis."""
+"""Authentication, SQLite sessions, and decorators for Aion."""
 import os
 import secrets
 import sqlite3
@@ -10,7 +10,7 @@ from flask import g, jsonify, request
 
 from config import CONFIG
 
-DB_PATH = "data/jarvis.db"
+DB_PATH = "data/aion.db"
 MIN_PASSWORD_LENGTH = 10
 PASSWORD_CHANGE_ALLOWED_PATHS = {"/api/change-password", "/api/whoami", "/api/logout"}
 
@@ -275,7 +275,7 @@ def delete_user(user_id: int):
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.cookies.get("jarvis_token")
+        token = request.cookies.get("aion_token")
         if not token:
             return jsonify({"error": "Unauthorized", "login_required": True}), 401
         user = get_user_by_token(token)
@@ -291,7 +291,7 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.cookies.get("jarvis_token")
+        token = request.cookies.get("aion_token")
         if not token:
             return jsonify({"error": "Unauthorized", "login_required": True}), 401
         user = get_user_by_token(token)
@@ -310,7 +310,7 @@ def vast_required(f):
     """Allow access to users with 'admin' or 'vast' role."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.cookies.get("jarvis_token")
+        token = request.cookies.get("aion_token")
         if not token:
             return jsonify({"error": "Unauthorized", "login_required": True}), 401
         user = get_user_by_token(token)

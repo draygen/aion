@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AION - Under Maintenance</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 1rem;
+            padding: 3rem;
+            text-align: center;
+            max-width: 500px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            margin: 1rem;
+        }
+        h1 {
+            color: #00d9ff;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            letter-spacing: 2px;
+        }
+        p {
+            color: #9fb7d1;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+        .loader {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-top: 1rem;
+        }
+        .loader span {
+            width: 12px;
+            height: 12px;
+            background: #00d9ff;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        .loader span:nth-child(1) { animation-delay: 0s; }
+        .loader span:nth-child(2) { animation-delay: 0.2s; }
+        .loader span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SYSTEM OFFLINE</h1>
+        <p>We are currently performing scheduled maintenance to upgrade our systems. Please check back shortly.</p>
+        <div class="loader">
+            <span></span><span></span><span></span>
+        </div>
+    </div>
+</body>
+</html>

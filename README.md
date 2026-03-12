@@ -1,10 +1,10 @@
-# Jarvis: Your Personal AI Assistant
+# Aion: Your Personal AI Assistant
 
-Jarvis is a personal AI assistant designed to be general-purpose and adaptable with your personal information. It leverages large language models (LLMs) for conversational capabilities and a fact retrieval system to provide context-aware responses.
+Aion is a personal AI assistant designed to be general-purpose and adaptable with your personal information. It leverages large language models (LLMs) for conversational capabilities and a fact retrieval system to provide context-aware responses.
 
 ## Features
 
-*   **Conversational AI**: Interact with Jarvis through a command-line interface.
+*   **Conversational AI**: Interact with Aion through a command-line interface.
 *   **LLM Integration**: Supports both local Ollama models (e.g., Mistral) and OpenAI's API (GPT-4o-mini).
 *   **Fact Management**: Ingests and retrieves facts from various data sources (JSONL files) to provide personalized and informed answers.
 *   **Command Handling**: Built-in commands for help, setting configurations, recalling facts, reloading data, and teaching new information.
@@ -22,8 +22,8 @@ Jarvis is a personal AI assistant designed to be general-purpose and adaptable w
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/draygen/jarvis.git
-    cd jarvis
+    git clone https://github.com/draygen/aion.git
+    cd aion
     ```
 
 2.  **Install dependencies**:
@@ -31,7 +31,7 @@ Jarvis is a personal AI assistant designed to be general-purpose and adaptable w
     pip install -r requirements.txt
     ```
 
-3.  **Configure Jarvis**:
+3.  **Configure Aion**:
     Open `config.py` and adjust settings as needed. Key configurations include:
     *   `model`: The LLM model to use (e.g., `mistral`, `gpt-4o-mini`).
     *   `backend`: `ollama` or `openai`.
@@ -57,7 +57,7 @@ Jarvis is a personal AI assistant designed to be general-purpose and adaptable w
 
 ## Usage
 
-To start Jarvis, run:
+To start Aion, run:
 
 ```bash
 python app.py
@@ -65,7 +65,7 @@ python app.py
 
 ### Commands
 
-Jarvis supports several commands:
+Aion supports several commands:
 
 *   `/help`: Show available commands.
 *   `/recall`: Display a few loaded facts (for debugging).

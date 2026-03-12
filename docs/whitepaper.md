@@ -1,7 +1,7 @@
-# Jarvis Whitepaper
+# Aion Whitepaper
 
 ## Overview
-Jarvis is a practical personal-assistant stack built around one constraint: responses should be grounded in user-specific memory rather than treated as generic chatbot output. The repository pairs conventional web application pieces, including auth, persistence, and admin tooling, with retrieval-augmented LLM behavior tuned for personal context.
+Aion is a practical personal-assistant stack built around one constraint: responses should be grounded in user-specific memory rather than treated as generic chatbot output. The repository pairs conventional web application pieces, including auth, persistence, and admin tooling, with retrieval-augmented LLM behavior tuned for personal context.
 
 ## Design Approach
 The system intentionally uses a layered memory model. Curated facts and imported QA pairs form the most stable retrieval layer. User-learned facts extend that layer without polluting global state. Semantic memory and goals add optional higher-level continuity. This is simpler than a fully agentic memory graph, but easier to audit and reason about.

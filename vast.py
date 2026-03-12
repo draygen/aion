@@ -11,8 +11,8 @@ VAST_API_BASE = "https://console.vast.ai/api/v0"
 # Auto-deploy shell script. MODEL_NAME is substituted before use.
 # Base image: ollama/ollama (Ollama + CUDA pre-installed — skips 2-3 min of setup)
 _ONSTART_TEMPLATE = r"""#!/bin/bash
-exec >> /var/log/jarvis-setup.log 2>&1
-echo "[$(date)] === Jarvis Auto-Deploy Started ==="
+exec >> /var/log/aion-setup.log 2>&1
+echo "[$(date)] === Aion Auto-Deploy Started ==="
 export DEBIAN_FRONTEND=noninteractive
 
 # Minimal deps only (no Ollama install needed — already in base image)
@@ -21,10 +21,10 @@ apt-get update -qq && apt-get install -y -qq python3-pip git rsync
 # Ollama is pre-installed; just start it
 nohup ollama serve >> /var/log/ollama.log 2>&1 &
 
-# Clone Jarvis + kick off model pull in parallel with pip install
+# Clone Aion + kick off model pull in parallel with pip install
 mkdir -p /workspace
-git clone https://github.com/draygen/jarvis.git /workspace/jarvis
-cd /workspace/jarvis
+git clone https://github.com/draygen/aion.git /workspace/aion
+cd /workspace/aion
 mkdir -p data
 
 # Model pull and pip install run simultaneously
@@ -33,7 +33,7 @@ nohup ollama pull nomic-embed-text >> /var/log/ollama.log 2>&1 &
 pip3 install -q -r requirements.txt gunicorn
 
 # Write remote config
-cat > /workspace/jarvis/config_local.py << 'LOCALCFG'
+cat > /workspace/aion/config_local.py << 'LOCALCFG'
 CONFIG_LOCAL = {
     "admin_password": "draygen2026",
     "backend": "ollama",
@@ -43,13 +43,13 @@ CONFIG_LOCAL = {
 }
 LOCALCFG
 
-# Start Jarvis immediately — LLM requests queue until model finishes pulling
-nohup gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 web:app >> /var/log/jarvis.log 2>&1 &
+# Start Aion immediately — LLM requests queue until model finishes pulling
+nohup gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 web:app >> /var/log/aion.log 2>&1 &
 
-echo "[$(date)] === Jarvis running on :5000 (model still pulling in background) ==="
+echo "[$(date)] === Aion running on :5000 (model still pulling in background) ==="
 """
 
-_JARVIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_AION_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def _headers():
@@ -148,14 +148,14 @@ def get_ssh_details(instance_id: int) -> dict:
 
 
 def deploy_on_offer(offer_id: int, disk_gb: int = 40) -> dict:
-    """Rent an offer and start the Jarvis auto-deploy script."""
+    """Rent an offer and start the Aion auto-deploy script."""
     model = CONFIG.get("model", "qwen2.5:7b")
     script = _ONSTART_TEMPLATE.replace("MODEL_NAME", model)
     body = {
         "image": "ollama/ollama:latest",
         "disk": disk_gb,
         "runtype": "ssh_direct",
-        "label": "jarvis",
+        "label": "aion",
         "env": {"-p 5000:5000": "1"},
         "onstart": script,
     }
@@ -209,8 +209,8 @@ def redeploy_code(ssh_host: str, ssh_port: int) -> dict:
         "--exclude=cloudflared*", "--exclude=ui/node_modules/",
         "--exclude=ui/dist/", "--exclude=*.pdf", "--exclude=*.md",
         "--exclude=WinSecSweep.ps1", "--exclude=*.bat",
-        f"{_JARVIS_DIR}/",
-        f"root@{ssh_host}:/workspace/jarvis/",
+        f"{_AION_DIR}/",
+        f"root@{ssh_host}:/workspace/aion/",
     ]
     r = subprocess.run(rsync_cmd, capture_output=True, text=True, timeout=900)
     if r.returncode != 0:
@@ -219,9 +219,9 @@ def redeploy_code(ssh_host: str, ssh_port: int) -> dict:
     restart_cmd = (
         "pkill gunicorn >/dev/null 2>&1 || true; "
         "sleep 1; "
-        "cd /workspace/jarvis && "
+        "cd /workspace/aion && "
         "setsid -f gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 web:app "
-        ">> /var/log/jarvis.log 2>&1 < /dev/null; "
+        ">> /var/log/aion.log 2>&1 < /dev/null; "
         "echo restarted"
     )
     ssh_cmd = [

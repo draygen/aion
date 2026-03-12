@@ -23,7 +23,7 @@ class TestApp(unittest.TestCase):
         prompt = build_prompt("test query")
         self.assertIn("Context (up to 12 snippets):\n- fact1\n- fact2", prompt)
         self.assertIn("User: test query\nAssistant:", prompt)
-        self.assertIn("You are JARVIS, Brian's personal AI assistant.", prompt)
+        self.assertIn("You are AION, Brian's personal AI assistant.", prompt)
 
     @patch("app.get_facts")
     def test_build_prompt_no_facts(self, mock_get_facts):
@@ -53,7 +53,7 @@ class TestApp(unittest.TestCase):
         with self.assertRaises(SystemExit) as cm:
             main()
         self.assertEqual(cm.exception.code, 0)
-        mock_print.assert_any_call("Jarvis: Goodbye.")
+        mock_print.assert_any_call("Aion: Goodbye.")
 
     @patch("app.speak")
     @patch("builtins.input", side_effect=["n", "/help", "exit"])
@@ -84,7 +84,7 @@ class TestApp(unittest.TestCase):
             main()
         mock_build_prompt.assert_called_once_with("hello")
         mock_ask_llm.assert_called_once_with("LLM prompt")
-        mock_print.assert_any_call("Jarvis: LLM response")
+        mock_print.assert_any_call("Aion: LLM response")
 
     @patch("app.speak")
     @patch("builtins.input", side_effect=["n", "test", "exit"])
@@ -93,7 +93,7 @@ class TestApp(unittest.TestCase):
     def test_main_llm_error_handling(self, mock_ask_llm, mock_print, mock_input, mock_speak):
         with self.assertRaises(SystemExit):
             main()
-        mock_print.assert_any_call("Jarvis (error): An error occurred while communicating with the LLM: LLM error")
+        mock_print.assert_any_call("Aion (error): An error occurred while communicating with the LLM: LLM error")
 
 if __name__ == '__main__':
     unittest.main()

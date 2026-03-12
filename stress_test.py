@@ -1,5 +1,5 @@
 """
-stress_test.py — Concurrent load test for Jarvis with live GPU monitoring.
+stress_test.py — Concurrent load test for Aion with live GPU monitoring.
 
 Fires N parallel chat threads against the live server while sampling
 nvidia-smi every 500ms, then prints a timeline and latency distribution.
@@ -19,7 +19,7 @@ import requests as req
 
 PROMPTS = [
     "What are Brian's main hobbies?",
-    "Tell me something about Jarvis the AI assistant.",
+    "Tell me something about Aion the AI assistant.",
     "What's the best way to optimize Python code?",
     "Who is Brian and what does he work on?",
     "Give me a one-sentence summary of machine learning.",
@@ -95,7 +95,7 @@ def sample_gpu(samples, stop_event, interval=0.4):
 
 def run_stress(host, workers, total_requests, username, password):
     print(f"\n{BOLD}{'━'*62}{RST}")
-    print(f"{BOLD}  Jarvis GPU Stress Test{RST}")
+    print(f"{BOLD}  Aion GPU Stress Test{RST}")
     print(f"  Host: {host}  |  Workers: {workers}  |  Requests: {total_requests}")
     print(f"{BOLD}{'━'*62}{RST}\n")
 
@@ -209,10 +209,10 @@ def run_stress(host, workers, total_requests, username, password):
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Jarvis GPU stress test")
+    parser = argparse.ArgumentParser(description="Aion GPU stress test")
     parser.add_argument("--workers",  type=int, default=4,            help="concurrent workers")
     parser.add_argument("--requests", type=int, default=12,           help="total requests to send")
-    parser.add_argument("--host",     default="localhost:5000",        help="Jarvis host:port")
+    parser.add_argument("--host",     default="localhost:5000",        help="Aion host:port")
     parser.add_argument("--user",     default="brian",                 help="username")
     parser.add_argument("--password", default="stress2026",            help="password")
     args = parser.parse_args()

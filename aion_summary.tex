@@ -1,0 +1,319 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[top=1in,bottom=1in,left=1.1in,right=1.1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{mdframed}
+\usepackage{enumitem}
+
+% ── Colours ──────────────────────────────────────────────────────────────────
+\definecolor{navy}{RGB}{15, 52, 96}
+\definecolor{accent}{RGB}{0, 150, 190}
+\definecolor{lightbg}{RGB}{245, 248, 252}
+\definecolor{rowalt}{RGB}{237, 243, 250}
+\definecolor{rulecol}{RGB}{200, 220, 235}
+\definecolor{muted}{RGB}{100, 110, 130}
+\definecolor{codered}{RGB}{180, 40, 40}
+
+% ── Hyperlinks ───────────────────────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,
+  urlcolor=accent,
+  linkcolor=navy,
+  pdfauthor={Brian Wallace},
+  pdftitle={Aion — Project Summary},
+}
+
+% ── Section headings ─────────────────────────────────────────────────────────
+\titleformat{\section}
+  {\Large\bfseries\color{navy}}
+  {}{0em}{}
+  [\vspace{2pt}\color{accent}\hrule height 1.5pt\vspace{4pt}]
+
+\titleformat{\subsection}
+  {\normalsize\bfseries\color{accent}}
+  {}{0em}{}
+
+\titlespacing{\section}{0pt}{18pt}{6pt}
+\titlespacing{\subsection}{0pt}{10pt}{4pt}
+
+% ── Header / Footer ───────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\fancyhead[L]{\small\color{muted}Aion — Project Summary}
+\fancyhead[R]{\small\color{muted}March 4, 2026}
+\fancyfoot[C]{\small\color{muted}\thepage}
+
+% ── Table helpers ─────────────────────────────────────────────────────────────
+\newcolumntype{M}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{X}{>{\raggedright\arraybackslash}p{\dimexpr\linewidth-2\tabcolsep}}
+
+% Shaded table row (alternate)
+\newcommand{\shd}{\rowcolor{rowalt}}
+
+% Code-style inline text
+\newcommand{\code}[1]{{\ttfamily\small\color{navy}#1}}
+
+% ── Callout box ───────────────────────────────────────────────────────────────
+\newmdenv[
+  backgroundcolor=lightbg,
+  linecolor=accent,
+  linewidth=2pt,
+  leftline=true, rightline=false, topline=false, bottomline=false,
+  innerleftmargin=10pt, innerrightmargin=8pt,
+  innertopmargin=6pt, innerbottommargin=6pt,
+  skipabove=8pt, skipbelow=8pt,
+]{callout}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+% ── Title block ───────────────────────────────────────────────────────────────
+\begin{center}
+  {\fontsize{28}{34}\selectfont\bfseries\color{navy} AION}\\[4pt]
+  {\large\color{muted} Personal AI Assistant — Project Summary}\\[6pt]
+  {\small\color{muted} Brian Wallace (draygen) \quad|\quad
+   \href{https://github.com/draygen/aion}{github.com/draygen/aion} \quad|\quad
+   March 4, 2026}
+\end{center}
+
+\vspace{4pt}
+\noindent\color{accent}\hrule height 2pt
+\vspace{16pt}
+
+% ── What Is Aion ────────────────────────────────────────────────────────────
+\section{What Is Aion?}
+
+Aion is a self-hosted personal AI assistant built on a local LLM (Ollama / qwen2.5:7b),
+deployed on Vast.ai GPU cloud instances. It features a web chat interface,
+persistent multi-user memory, voice output (ElevenLabs TTS), and an admin panel
+for managing cloud deployments — completely private with no third-party data retention.
+
+\begin{callout}
+  \textbf{Production URL:} \href{https://drayhub.org}{https://drayhub.org} \quad
+  \textbf{LLM:} qwen2.5:7b via Ollama \quad
+  \textbf{Platform:} Vast.ai GPU cloud
+\end{callout}
+
+% ── Architecture ──────────────────────────────────────────────────────────────
+\section{Architecture}
+
+\subsection{Backend Files}
+
+\renewcommand{\arraystretch}{1.35}
+\begin{tabularx}{\linewidth}{M{2.4cm} X}
+  \toprule
+  \rowcolor{navy}\multicolumn{1}{l}{\color{white}\textbf{File}} &
+  \multicolumn{1}{l}{\color{white}\textbf{Purpose}} \\
+  \midrule
+  \shd \code{web.py}         & Flask web server — all HTTP routes and API endpoints \\
+       \code{brain.py}       & TF-IDF semantic memory retrieval over JSONL fact files \\
+  \shd \code{llm.py}         & LLM abstraction layer — Ollama (local) or OpenAI backend \\
+       \code{auth.py}        & bcrypt login, SQLite token sessions, \code{@login\_required} decorator \\
+  \shd \code{extractor.py}   & Background daemon thread — auto-extracts facts from conversations \\
+       \code{vast.py}        & Vast.ai API client — search GPUs, deploy, destroy, redeploy \\
+  \shd \code{config.py}      & Central config dict (non-secret defaults only) \\
+       \code{config\_local.py} & Secret keys and passwords — gitignored, never committed \\
+  \bottomrule
+\end{tabularx}
+
+\vspace{10pt}
+\subsection{Frontend Templates}
+
+\begin{tabularx}{\linewidth}{M{2.4cm} X}
+  \toprule
+  \rowcolor{navy}\multicolumn{1}{l}{\color{white}\textbf{File}} &
+  \multicolumn{1}{l}{\color{white}\textbf{Purpose}} \\
+  \midrule
+  \shd \code{index.html}  & Main chat UI — login overlay, chat window, memory browser \\
+       \code{admin.html}  & Admin panel — Vast.ai GPU market and instance management \\
+  \shd \code{logs.html}   & Chat log viewer (admin-key protected) \\
+  \bottomrule
+\end{tabularx}
+
+\vspace{10pt}
+\subsection{Data Files (gitignored — all private)}
+
+\begin{tabularx}{\linewidth}{M{3.6cm} X}
+  \toprule
+  \rowcolor{navy}\multicolumn{1}{l}{\color{white}\textbf{File}} &
+  \multicolumn{1}{l}{\color{white}\textbf{Contents}} \\
+  \midrule
+  \shd \code{data/aion.db}              & SQLite: users, tokens, per-user chat history \\
+       \code{data/shared\_learned.jsonl}  & Facts learned from conversations (shared across all users) \\
+  \shd \code{data/profile.jsonl}          & Curated identity facts (highest retrieval priority) \\
+       \code{data/brian\_facts.jsonl}     & Brian's personal facts \\
+  \shd \code{data/jenn\_messages.jsonl}   & Jennifer's Facebook messages, verbatim with metadata \\
+       \code{data/fb\_messages\_parsed.jsonl} & Brian's parsed Facebook messages \\
+  \shd \code{data/fb\_qa\_pairs.jsonl}    & Q\&A pairs extracted from Facebook conversations \\
+  \bottomrule
+\end{tabularx}
+
+% ── Key Features ──────────────────────────────────────────────────────────────
+\section{Key Features}
+
+\subsection{Multi-User Authentication}
+\begin{itemize}[leftmargin=1.2em, itemsep=2pt]
+  \item Login with username and password (bcrypt hashed, stored in SQLite)
+  \item 30-day sliding session cookie (\code{aion\_token}, httponly)
+  \item Roles: \textbf{admin} and \textbf{user}; Brian's admin account auto-created on first run
+  \item Per-user chat history stored in SQLite — last 40 turns sent to LLM as context
+  \item Cross-device: same account works from any browser or device
+\end{itemize}
+
+\subsection{Shared Persistent Memory}
+\begin{itemize}[leftmargin=1.2em, itemsep=2pt]
+  \item All users share one fact store (\code{shared\_learned.jsonl})
+  \item Facts learned by Brian are visible when any other user logs in
+  \item Explicit shortcut: \code{remember: Gary is Brian's friend from Laconia} — instant, no LLM call
+  \item TF-IDF retrieval injects the 15 most relevant facts into every system prompt
+  \item Persists across server restarts — backed by file on disk
+\end{itemize}
+
+\subsection{Auto Fact Extraction}
+\begin{itemize}[leftmargin=1.2em, itemsep=2pt]
+  \item After every LLM reply, a daemon thread asks the LLM to extract notable facts
+  \item Extracted facts are added to shared memory automatically
+  \item Zero latency impact — fire-and-forget, user gets their reply immediately
+\end{itemize}
+
+\subsection{Memory Browser}
+\begin{itemize}[leftmargin=1.2em, itemsep=2pt]
+  \item Full Facebook message browser built into the chat UI
+  \item Categorised by: Birth \& Pregnancy, Love \& Relationships, Family \& Parenting,
+        Health \& Wellbeing, Loss \& Grief, Major Life Events, General
+  \item Expandable conversation threads rendered as chat bubbles with timestamps
+\end{itemize}
+
+\subsection{Vast.ai Admin Panel (\texttt{/admin})}
+\begin{itemize}[leftmargin=1.2em, itemsep=2pt]
+  \item \textbf{GPU Market:} search available instances by max \$/hr, min VRAM, GPU name
+  \item Shows GPU model, VRAM, system RAM, disk, network speed, reliability \%, and price
+  \item One-click \textbf{Deploy} — provisions instance and runs full auto-deploy script:
+    installs Ollama, pulls qwen2.5:7b, clones repo from GitHub, installs Python deps,
+    starts Aion on port 5000
+  \item \textbf{Running Instances:} shows status, SSH info, web URL, uptime, and hourly cost
+  \item \textbf{Redeploy Code} — rsync local changes and restart gunicorn via SSH
+  \item \textbf{Destroy} — terminates instance immediately
+\end{itemize}
+
+% ── API Reference ─────────────────────────────────────────────────────────────
+\section{API Endpoints}
+
+\subsection{Authentication}
+\begin{tabularx}{\linewidth}{M{1.4cm} M{4.8cm} X}
+  \toprule
+  \rowcolor{navy}
+  \multicolumn{1}{l}{\color{white}\textbf{Method}} &
+  \multicolumn{1}{l}{\color{white}\textbf{Path}} &
+  \multicolumn{1}{l}{\color{white}\textbf{Description}} \\
+  \midrule
+  \shd POST   & \code{/api/login}              & Set session cookie (30-day) \\
+       POST   & \code{/api/logout}             & Clear session cookie \\
+  \shd GET    & \code{/api/whoami}             & Return \{username, role\} \\
+       POST   & \code{/api/admin/users}        & Create user (admin only) \\
+  \shd DELETE & \code{/api/admin/users/<id>}   & Delete user (admin only) \\
+  \bottomrule
+\end{tabularx}
+
+\vspace{10pt}
+\subsection{Chat \& Memory}
+\begin{tabularx}{\linewidth}{M{1.4cm} M{4.8cm} X}
+  \toprule
+  \rowcolor{navy}
+  \multicolumn{1}{l}{\color{white}\textbf{Method}} &
+  \multicolumn{1}{l}{\color{white}\textbf{Path}} &
+  \multicolumn{1}{l}{\color{white}\textbf{Description}} \\
+  \midrule
+  \shd POST & \code{/api/chat}                      & Send message, get LLM response \\
+       GET  & \code{/api/memory/browse}              & Facebook message categories \\
+  \shd GET  & \code{/api/memory/thread/<id>}         & Individual thread messages \\
+  \bottomrule
+\end{tabularx}
+
+\vspace{10pt}
+\subsection{Vast.ai (Admin Only)}
+\begin{tabularx}{\linewidth}{M{1.4cm} M{4.8cm} X}
+  \toprule
+  \rowcolor{navy}
+  \multicolumn{1}{l}{\color{white}\textbf{Method}} &
+  \multicolumn{1}{l}{\color{white}\textbf{Path}} &
+  \multicolumn{1}{l}{\color{white}\textbf{Description}} \\
+  \midrule
+  \shd GET    & \code{/api/admin/vast/offers}                    & Search available GPU offers \\
+       GET    & \code{/api/admin/vast/instances}                 & List running instances \\
+  \shd POST   & \code{/api/admin/vast/deploy}                    & Deploy Aion on an offer \\
+       DELETE & \code{/api/admin/vast/instances/<id>}            & Destroy instance \\
+  \shd POST   & \code{/api/admin/vast/instances/<id>/redeploy}   & Push code and restart \\
+  \bottomrule
+\end{tabularx}
+
+% ── CLI Scripts ───────────────────────────────────────────────────────────────
+\section{CLI Scripts}
+
+\begin{tabularx}{\linewidth}{M{2.8cm} X}
+  \toprule
+  \rowcolor{navy}\multicolumn{1}{l}{\color{white}\textbf{Script}} &
+  \multicolumn{1}{l}{\color{white}\textbf{Purpose}} \\
+  \midrule
+  \shd \code{deploy.sh}    & Full first-time setup on a fresh Vast.ai instance \\
+       \code{redeploy.sh}  & Sync code changes and restart gunicorn (runs dos2unix automatically) \\
+  \shd \code{destroy.sh}   & List running instances and destroy by ID (interactive or direct) \\
+       \code{start\_web.sh} & Run Aion locally with a Cloudflare tunnel for public access \\
+  \bottomrule
+\end{tabularx}
+
+% ── Security ──────────────────────────────────────────────────────────────────
+\section{Security}
+
+\begin{itemize}[leftmargin=1.2em, itemsep=2pt]
+  \item All API keys and passwords live in \code{config\_local.py} (gitignored — never pushed)
+  \item \code{data/} directory is gitignored — all private family data stays local only
+  \item \code{.gitattributes} enforces LF line endings; \code{core.autocrlf=input} set globally
+  \item \code{/admin} route protected server-side by role check before rendering
+  \item Session tokens are 32-byte hex with 30-day sliding expiry; httponly cookie
+  \item \textbf{Action required:} ElevenLabs key was previously committed to git history —
+        rotate it at \href{https://elevenlabs.io}{elevenlabs.io}
+\end{itemize}
+
+% ── Infrastructure ────────────────────────────────────────────────────────────
+\section{Infrastructure}
+
+\begin{tabularx}{\linewidth}{M{3cm} X}
+  \toprule
+  \rowcolor{navy}\multicolumn{1}{l}{\color{white}\textbf{Component}} &
+  \multicolumn{1}{l}{\color{white}\textbf{Details}} \\
+  \midrule
+  \shd Local dev      & WSL2 on Windows — \code{/mnt/c/aion}, Python venv at \code{.venv/} \\
+       Production     & Vast.ai GPU instance, deployed via admin panel or \code{deploy.sh} \\
+  \shd Public URL     & \href{https://drayhub.org}{https://drayhub.org} via Cloudflare tunnel \\
+       LLM            & qwen2.5:7b via Ollama — local inference, no API cost \\
+  \shd Database       & SQLite (\code{data/aion.db}) — users, tokens, chat history \\
+       Memory store   & JSONL flat files + in-memory TF-IDF index (sklearn) \\
+  \bottomrule
+\end{tabularx}
+
+% ── Planned ───────────────────────────────────────────────────────────────────
+\section{Planned / Next Up}
+
+\begin{itemize}[leftmargin=1.2em, itemsep=2pt]
+  \item UI enhancements — improved chat interface, theming, mobile layout
+\end{itemize}
+
+\vspace{20pt}
+\noindent\color{rulecol}\hrule
+\vspace{8pt}
+{\small\color{muted}\textit{Generated March 4, 2026 \quad — \quad Aion by Brian Wallace}}
+
+\end{document}

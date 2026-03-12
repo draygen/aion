@@ -5,12 +5,12 @@ test('public health endpoint responds', async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const body = await response.json();
   expect(body.ok).toBe(true);
-  expect(body.service).toBe('jarvis');
+  expect(body.service).toBe('aion');
 });
 
 test('landing page renders login UI', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle(/Jarvis/i);
+  await expect(page).toHaveTitle(/Aion/i);
   await expect(page.locator('#login-overlay')).toHaveClass(/visible/);
   await expect(page.locator('#login-username')).toBeVisible();
   await expect(page.locator('#login-password')).toBeVisible();
@@ -18,10 +18,10 @@ test('landing page renders login UI', async ({ page }) => {
 });
 
 test('user can sign in when credentials are provided', async ({ page }) => {
-  const username = process.env.JARVIS_USERNAME;
-  const password = process.env.JARVIS_PASSWORD;
+  const username = process.env.AION_USERNAME;
+  const password = process.env.AION_PASSWORD;
 
-  test.skip(!username || !password, 'Set JARVIS_USERNAME and JARVIS_PASSWORD to run the login smoke test.');
+  test.skip(!username || !password, 'Set AION_USERNAME and AION_PASSWORD to run the login smoke test.');
 
   await page.goto('/');
   await page.locator('#login-username').fill(username);

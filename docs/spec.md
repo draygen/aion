@@ -1,7 +1,7 @@
-# Jarvis Specification
+# Aion Specification
 
 ## Purpose
-Jarvis is a personal AI assistant that combines chat, retrieval, memory, and operator tooling in one Python codebase. It serves three primary surfaces: a CLI assistant, a Flask web app, and a small Electron wrapper in `ui/`.
+Aion is a personal AI assistant that combines chat, retrieval, memory, and operator tooling in one Python codebase. It serves three primary surfaces: a CLI assistant, a Flask web app, and a small Electron wrapper in `ui/`.
 
 ## Core Components
 - `app.py`: interactive CLI loop with commands, retrieval, and optional TTS.
@@ -14,7 +14,7 @@ Jarvis is a personal AI assistant that combines chat, retrieval, memory, and ope
 
 ## Runtime Behavior
 - Primary web port: `5000`.
-- Authentication model: cookie-based session token (`jarvis_token`) with role-gated admin and Vast endpoints.
+- Authentication model: cookie-based session token (`aion_token`) with role-gated admin and Vast endpoints.
 - Retrieval model: scoped facts first, then semantic memory and goals where enabled.
 - Health probe: `GET /api/system/public/health`.
 - Default remote inference path: Ollama.

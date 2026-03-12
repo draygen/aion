@@ -62,7 +62,7 @@ class TestWebSecurity(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
         self.assertTrue(body["ok"])
-        self.assertEqual(body["service"], "jarvis")
+        self.assertEqual(body["service"], "aion")
         self.assertIn("time", body)
 
     @patch("web.get_facts", return_value=["fact"])
@@ -74,7 +74,7 @@ class TestWebSecurity(unittest.TestCase):
 
     @patch("auth.get_user_by_token", return_value={"id": 1, "username": "brian", "role": "admin", "must_change_password": 0})
     def test_admin_can_read_network_config(self, mock_get_user):
-        self.client.set_cookie("jarvis_token", "test-token")
+        self.client.set_cookie("aion_token", "test-token")
         response = self.client.get("/api/admin/network/config")
         self.assertEqual(response.status_code, 200)
         self.assertIn("authorized_network_targets", response.get_json())
@@ -82,7 +82,7 @@ class TestWebSecurity(unittest.TestCase):
     @patch("web.handle_ops_command", return_value="PING for app.example.com:\n```ok```")
     @patch("auth.get_user_by_token", return_value={"id": 1, "username": "brian", "role": "admin", "must_change_password": 0})
     def test_admin_can_run_network_command(self, mock_get_user, mock_handle):
-        self.client.set_cookie("jarvis_token", "test-token")
+        self.client.set_cookie("aion_token", "test-token")
         response = self.client.post("/api/admin/network/run", json={"command": "ping app.example.com"})
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.get_json()["ok"])
@@ -90,7 +90,7 @@ class TestWebSecurity(unittest.TestCase):
 
     @patch("auth.get_user_by_token", return_value={"id": 1, "username": "brian", "role": "admin", "must_change_password": 1})
     def test_chat_blocked_until_password_changed(self, mock_get_user):
-        self.client.set_cookie("jarvis_token", "test-token")
+        self.client.set_cookie("aion_token", "test-token")
         response = self.client.post("/api/chat", json={"message": "hello"})
         self.assertEqual(response.status_code, 403)
         self.assertTrue(response.get_json()["requires_password_change"])
@@ -98,7 +98,7 @@ class TestWebSecurity(unittest.TestCase):
     @patch("web.change_password", return_value=None)
     @patch("auth.get_user_by_token", return_value={"id": 1, "username": "brian", "role": "admin", "must_change_password": 1})
     def test_change_password_allowed_while_flagged(self, mock_get_user, mock_change_password):
-        self.client.set_cookie("jarvis_token", "test-token")
+        self.client.set_cookie("aion_token", "test-token")
         response = self.client.post(
             "/api/change-password",
             json={"current_password": "changeme2026", "new_password": "something-better-2026"},

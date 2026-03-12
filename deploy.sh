@@ -1,5 +1,5 @@
 #!/bin/bash
-# Jarvis deploy script — runs on the remote Vast.ai instance
+# Aion deploy script — runs on the remote Vast.ai instance
 set -e
 
 echo "=== [1/6] System deps ==="
@@ -16,15 +16,15 @@ ollama pull qwen2.5:7b
 echo "=== [4/6] Python deps ==="
 pip3 install -q flask flask-cors scikit-learn gtts elevenlabs requests gunicorn beautifulsoup4
 
-echo "=== [5/6] Start Jarvis ==="
-cd /workspace/jarvis
+echo "=== [5/6] Start Aion ==="
+cd /workspace/aion
 mkdir -p data
 
 # Start Flask via gunicorn on port 5000
 pkill -f gunicorn || true
 gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 --log-level info web:app \
-  >> /var/log/jarvis.log 2>&1 &
+  >> /var/log/aion.log 2>&1 &
 
-echo "=== [6/6] Done — Jarvis running on :5000 ==="
+echo "=== [6/6] Done — Aion running on :5000 ==="
 echo "Ollama log: /var/log/ollama.log"
-echo "Jarvis log: /var/log/jarvis.log"
+echo "Aion log: /var/log/aion.log"

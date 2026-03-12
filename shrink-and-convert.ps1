@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------
-# Final JARVIS Prep Script (VMDK → QCOW2 → shrink → IMG)
+# Final AION Prep Script (VMDK → QCOW2 → shrink → IMG)
 # Requires: GParted has already shrunk filesystem inside the VM
 # ------------------------------------------------------------------
 
@@ -8,7 +8,7 @@ $qemuPath     = "C:\qemu\qemu-img.exe"
 $sourceVMDK   = "$vmDir\KaliLinux-merged.vmdk"
 $qcowOutput   = "$vmDir\KaliLinux.qcow2"
 $resizedCap   = "100G"
-$finalIMG     = "$vmDir\kali-jarvis.img"
+$finalIMG     = "$vmDir\kali-aion.img"
 
 Write-Host ""
 Write-Host "Step 1: Converting VMDK → QCOW2..." -ForegroundColor Cyan

@@ -1,9 +1,9 @@
 #!/bin/bash
-# Start Jarvis web server with Cloudflare Tunnel for public access
+# Start Aion web server with Cloudflare Tunnel for public access
 
 cd "$(dirname "$0")"
 
-echo "Starting Jarvis web server..."
+echo "Starting Aion web server..."
 
 # Start Flask in background
 python web.py &

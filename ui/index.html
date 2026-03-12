@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Jarvis</title>
+  <title>Aion</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -190,7 +190,7 @@
 <body>
 
 <header>
-  <h1><span id="status-dot"></span>JARVIS</h1>
+  <h1><span id="status-dot"></span>AION</h1>
   <div class="header-btns">
     <button class="hdr-btn" id="tts-btn">TTS ON</button>
     <button class="hdr-btn" id="settings-btn">⚙</button>
@@ -200,7 +200,7 @@
 <div id="chat"></div>
 
 <div id="input-bar">
-  <input type="text" id="msg-input" placeholder="Ask Jarvis..." autocomplete="off">
+  <input type="text" id="msg-input" placeholder="Ask Aion..." autocomplete="off">
   <button id="send-btn">Send</button>
 </div>
 
@@ -209,7 +209,7 @@
   <div class="settings-box">
     <h2>Settings</h2>
     <div class="field">
-      <label>Jarvis API URL</label>
+      <label>Aion API URL</label>
       <input type="text" id="api-url-input" placeholder="http://50.173.192.52:41658">
     </div>
     <div class="settings-btns">
@@ -233,7 +233,7 @@
 
   // Load config from electron main process
   async function init() {
-    const config = await window.jarvis.getConfig();
+    const config = await window.aion.getConfig();
     apiUrl = config.apiUrl || apiUrl;
     apiInput.value = apiUrl;
     checkStatus();
@@ -299,7 +299,7 @@
       statusDot.className = 'online';
     } catch (err) {
       typing.remove();
-      addMsg('Could not reach Jarvis. Is the server running? (' + err.message + ')', 'assistant error');
+      addMsg('Could not reach Aion. Is the server running? (' + err.message + ')', 'assistant error');
       statusDot.className = 'offline';
     }
 
@@ -325,7 +325,7 @@
   });
   document.getElementById('save-btn').addEventListener('click', async () => {
     apiUrl = apiInput.value.trim().replace(/\/$/, '');
-    await window.jarvis.saveConfig({ apiUrl });
+    await window.aion.saveConfig({ apiUrl });
     settingsEl.classList.remove('open');
     checkStatus();
   });

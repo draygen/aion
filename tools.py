@@ -1,4 +1,4 @@
-"""Allowlisted network ops tools for Jarvis."""
+"""Allowlisted network ops tools for Aion."""
 from __future__ import annotations
 
 import ipaddress
@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from config import CONFIG
 
 _HOST_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:-]*[a-zA-Z0-9]$")
-_DEFAULT_FFUF_WORDLIST = "/workspace/jarvis/data/admin_wordlists/ffuf_quick.txt"
+_DEFAULT_FFUF_WORDLIST = "/workspace/aion/data/admin_wordlists/ffuf_quick.txt"
 _TOOL_REGISTRY = None
 
 

@@ -13,9 +13,9 @@ echo "==> Fixing line endings..."
 find . -maxdepth 1 \( -name "*.py" -o -name "*.sh" -o -name "*.html" \) \
   -not -path './.venv*' | xargs sed -i 's/\r//'
 
-HOST="${JARVIS_REMOTE_HOST:-root@ssh9.vast.ai}"
-SSH_PORT="${JARVIS_REMOTE_PORT:-38252}"
-SSH_KEY="${JARVIS_REMOTE_KEY:-$HOME/.ssh/id_ed25519}"
+HOST="${AION_REMOTE_HOST:-root@ssh9.vast.ai}"
+SSH_PORT="${AION_REMOTE_PORT:-38252}"
+SSH_KEY="${AION_REMOTE_KEY:-$HOME/.ssh/id_ed25519}"
 SSH="ssh -o StrictHostKeyChecking=no -p $SSH_PORT -i $SSH_KEY"
 
 echo "==> Syncing code..."
@@ -32,19 +32,19 @@ rsync -az \
   --exclude='config_local.py' \
   --exclude='ui/node_modules/' \
   --exclude='deploy.sh' \
-  /mnt/c/jarvis/ $HOST:/workspace/jarvis/
+  /mnt/c/aion/ $HOST:/workspace/aion/
 
-echo "==> Restarting Jarvis..."
+echo "==> Restarting Aion..."
 # Note: use 'pkill gunicorn' (not -f) — pkill -f matches the SSH session cmdline and kills itself
-$SSH $HOST 'cat > /tmp/start_jarvis.sh << SCRIPT
+$SSH $HOST 'cat > /tmp/start_aion.sh << SCRIPT
 #!/bin/bash
 pkill gunicorn || true
 sleep 1
-cd /workspace/jarvis
-exec nohup gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 web:app >> /var/log/jarvis.log 2>&1
+cd /workspace/aion
+exec nohup gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 web:app >> /var/log/aion.log 2>&1
 SCRIPT
-chmod +x /tmp/start_jarvis.sh
-setsid /tmp/start_jarvis.sh &
+chmod +x /tmp/start_aion.sh
+setsid /tmp/start_aion.sh &
 sleep 3
 curl -s http://localhost:5000/ | grep -o "<title>[^<]*</title>"'
 

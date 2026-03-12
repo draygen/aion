@@ -1,5 +1,5 @@
 """
-qa_profile.py — Full QA + performance profiling for Jarvis web server.
+qa_profile.py — Full QA + performance profiling for Aion web server.
 
 Phase 1: Integration tests via Flask test client (fast, deterministic)
 Phase 2: End-to-end latency test via live HTTP + real LLM call timing
@@ -63,7 +63,7 @@ import auth
 from config import CONFIG
 
 _TEMP = tempfile.TemporaryDirectory()
-auth.DB_PATH = os.path.join(_TEMP.name, "jarvis-profile-test.db")
+auth.DB_PATH = os.path.join(_TEMP.name, "aion-profile-test.db")
 CONFIG["admin_password"] = "profiler2026!"
 CONFIG["auto_extract_facts"] = False      # don't spin up background LLM calls
 CONFIG["memory_enabled"] = False          # keep memory_store noise out
@@ -88,7 +88,7 @@ def _login():
     # Extract token from cookie header
     for part in token.split(";"):
         part = part.strip()
-        if part.startswith("jarvis_token="):
+        if part.startswith("aion_token="):
             return c, part.split("=", 1)[1]
     data = r.get_json()
     return c, None
@@ -112,12 +112,12 @@ cookie_header = r.headers.get("Set-Cookie", "")
 token_value = ""
 for part in cookie_header.split(";"):
     part = part.strip()
-    if part.startswith("jarvis_token="):
+    if part.startswith("aion_token="):
         token_value = part.split("=", 1)[1]
 if not token_value:
     print(f"  {FAIL} Could not extract auth token — skipping authenticated tests")
     sys.exit(1)
-client.set_cookie("jarvis_token", token_value)
+client.set_cookie("aion_token", token_value)
 
 # 2. Whoami
 t0 = time.perf_counter()
@@ -183,8 +183,8 @@ record("POST /api/chat (no auth → 401)", r2.status_code == 401,
 client2 = app.test_client()
 r3 = client2.post("/api/login", json={"username": "brian", "password": "profiler2026!"})
 for part in r3.headers.get("Set-Cookie", "").split(";"):
-    if part.strip().startswith("jarvis_token="):
-        client2.set_cookie("jarvis_token", part.strip().split("=", 1)[1])
+    if part.strip().startswith("aion_token="):
+        client2.set_cookie("aion_token", part.strip().split("=", 1)[1])
 t0 = time.perf_counter()
 r4 = client2.post("/api/chat", json={"message": "", "tts": False})
 record("POST /api/chat (empty message → 400)", r4.status_code == 400,

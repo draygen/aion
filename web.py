@@ -1,4 +1,4 @@
-"""Flask web server for Jarvis chat interface."""
+"""Flask web server for Aion chat interface."""
 import base64
 import io
 import json
@@ -74,7 +74,7 @@ def _should_use_secure_cookie() -> bool:
 
 
 def _authenticate_request():
-    token = request.cookies.get("jarvis_token")
+    token = request.cookies.get("aion_token")
     if not token:
         return jsonify({"error": "Unauthorized", "login_required": True}), 401
     user = get_user_by_token(token)
@@ -101,7 +101,7 @@ def handle_network_command(message: str, client_ip: str) -> str | None:
 
 
 _SYSTEM_STATIC_HEADER = """\
-You are JARVIS, an AI assistant created by Brian Wallace (aka draygen).
+You are AION, an AI assistant created by Brian Wallace (aka draygen).
 Style: informal, witty, direct, occasionally sarcastic but always loyal to Brian.
 Keep answers concise unless Brian asks for detail.
 
@@ -273,7 +273,7 @@ def generate_tts_audio(text: str) -> str:
 def api_system_public_health():
     return jsonify({
         "ok": True,
-        "service": "jarvis",
+        "service": "aion",
         "time": _utc_now_iso(),
     })
 
@@ -295,7 +295,7 @@ def api_login():
         "requires_password_change": bool(user.get("must_change_password")),
     }))
     resp.set_cookie(
-        "jarvis_token",
+        "aion_token",
         token,
         max_age=86400 * 30,
         samesite=CONFIG.get("cookie_samesite", "Lax"),
@@ -319,11 +319,11 @@ def api_change_password():
 
 @app.route("/api/logout", methods=["POST"])
 def api_logout():
-    token = request.cookies.get("jarvis_token")
+    token = request.cookies.get("aion_token")
     if token:
         delete_token(token)
     resp = make_response(jsonify({"ok": True}))
-    resp.delete_cookie("jarvis_token")
+    resp.delete_cookie("aion_token")
     return resp
 
 
@@ -339,7 +339,7 @@ def api_whoami():
 
 @app.route("/api/sso", methods=["POST"])
 def api_sso():
-    """Exchange a Drayhub SSO token for a Jarvis session cookie."""
+    """Exchange a Drayhub SSO token for a Aion session cookie."""
     data = request.get_json() or {}
     sso_token = data.get("token", "").strip()
     if not sso_token:
@@ -347,7 +347,7 @@ def api_sso():
 
     drayhub_api = CONFIG.get("drayhub_api", "http://127.0.0.1:8888")
     try:
-        body = json.dumps({"token": sso_token, "service": "jarvis"}).encode()
+        body = json.dumps({"token": sso_token, "service": "aion"}).encode()
         req = urllib.request.Request(
             f"{drayhub_api}/api/public/auth/sso-validate",
             data=body,
@@ -367,7 +367,7 @@ def api_sso():
     if not username:
         return jsonify({"error": "No username in SSO response"}), 401
 
-    # Map drayhub roles to jarvis role
+    # Map drayhub roles to aion role
     roles_lower = [r.lower() for r in roles]
     if any(r in ("role_admin", "role_superuser") for r in roles_lower):
         role = "admin"
@@ -376,7 +376,7 @@ def api_sso():
     else:
         role = "user"
 
-    # Find or create Jarvis user
+    # Find or create Aion user
     import secrets as _secrets
     db = get_db()
     row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
@@ -399,7 +399,7 @@ def api_sso():
         "role": user["role"],
     }))
     resp.set_cookie(
-        "jarvis_token",
+        "aion_token",
         token,
         max_age=86400 * 30,
         samesite=CONFIG.get("cookie_samesite", "Lax"),
@@ -862,7 +862,7 @@ def memory_thread_detail(thread_id):
 
 @app.route("/admin")
 def admin_panel():
-    token = request.cookies.get("jarvis_token")
+    token = request.cookies.get("aion_token")
     if not token:
         return redirect("/")
     user = get_user_by_token(token)
@@ -995,7 +995,7 @@ def api_vast_redeploy(instance_id):
 
 
 if __name__ == "__main__":
-    print("Starting Jarvis web server...")
+    print("Starting Aion web server...")
     print("LAN access: http://localhost:5000 or http://<your-local-ip>:5000")
     print("For WAN access, run: cloudflared tunnel --url http://localhost:5000")
     app.run(host="0.0.0.0", port=5000, debug=True)

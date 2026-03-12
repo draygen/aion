@@ -72,7 +72,7 @@ def _build_with_gpt4o(facts: list[str]) -> str:
                     "- Family in detail: wife, children (with birth dates), parents, siblings, "
                     "extended family, relationships between them\n"
                     "- Personality, character, communication style\n"
-                    "- Technical skills, projects, and passions (Jarvis, hacking, music, cooking)\n"
+                    "- Technical skills, projects, and passions (Aion, hacking, music, cooking)\n"
                     "- Life philosophy and outlook\n"
                     "- Any notable details, preferences, or context\n\n"
                     "This profile will be permanently injected into an AI assistant's context "

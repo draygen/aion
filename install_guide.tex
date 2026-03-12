@@ -1,0 +1,332 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[top=1in,bottom=1in,left=1.1in,right=1.1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage[table]{xcolor}
+\usepackage{colortbl}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{mdframed}
+\usepackage{enumitem}
+\usepackage{listings}
+
+% ── Colours ──────────────────────────────────────────────────────────────────
+\definecolor{navy}{RGB}{15, 52, 96}
+\definecolor{accent}{RGB}{0, 150, 190}
+\definecolor{lightbg}{RGB}{245, 248, 252}
+\definecolor{codebg}{RGB}{30, 35, 50}
+\definecolor{codetext}{RGB}{200, 220, 255}
+\definecolor{rowalt}{RGB}{237, 243, 250}
+\definecolor{muted}{RGB}{100, 110, 130}
+\definecolor{green}{RGB}{40, 160, 80}
+\definecolor{orange}{RGB}{200, 100, 20}
+\definecolor{rulecol}{RGB}{200, 220, 235}
+\definecolor{warnyellow}{RGB}{255, 248, 235}
+
+% ── Hyperlinks ────────────────────────────────────────────────────────────────
+\hypersetup{colorlinks=true, urlcolor=accent, linkcolor=navy,
+  pdftitle={Aion — Installation Guide}}
+
+% ── Section headings ─────────────────────────────────────────────────────────
+\titleformat{\section}
+  {\Large\bfseries\color{navy}}{}{0em}{}
+  [\vspace{2pt}\color{accent}\hrule height 1.5pt\vspace{4pt}]
+\titleformat{\subsection}{\normalsize\bfseries\color{accent}}{}{0em}{}
+\titlespacing{\section}{0pt}{18pt}{6pt}
+\titlespacing{\subsection}{0pt}{10pt}{4pt}
+
+% ── Header / Footer ───────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\fancyhead[L]{\small\color{muted}Aion — Installation Guide}
+\fancyhead[R]{\small\color{muted}github.com/draygen/aion}
+\fancyfoot[C]{\small\color{muted}\thepage}
+
+% ── Code blocks ───────────────────────────────────────────────────────────────
+\lstdefinestyle{shell}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small\color{codetext},
+  breaklines=true,
+  breakatwhitespace=true,
+  frame=none,
+  xleftmargin=10pt, xrightmargin=10pt,
+  aboveskip=6pt, belowskip=6pt,
+  showstringspaces=false,
+  moredelim=[is][\color{green}]{@}{@},
+  moredelim=[is][\color{orange}]{!}{!},
+}
+\lstset{style=shell}
+
+% ── Callout boxes ─────────────────────────────────────────────────────────────
+\newmdenv[backgroundcolor=lightbg, linecolor=accent, linewidth=2pt,
+  leftline=true, rightline=false, topline=false, bottomline=false,
+  innerleftmargin=10pt, innerrightmargin=8pt,
+  innertopmargin=6pt, innerbottommargin=6pt,
+  skipabove=8pt, skipbelow=8pt]{infobox}
+
+\newmdenv[backgroundcolor=warnyellow, linecolor=orange, linewidth=2pt,
+  leftline=true, rightline=false, topline=false, bottomline=false,
+  innerleftmargin=10pt, innerrightmargin=8pt,
+  innertopmargin=6pt, innerbottommargin=6pt,
+  skipabove=8pt, skipbelow=8pt]{warnbox}
+
+% ── Helpers ───────────────────────────────────────────────────────────────────
+\newcommand{\code}[1]{{\ttfamily\small\color{navy}#1}}
+\newcolumntype{M}[1]{>{\raggedright\arraybackslash}p{#1}}
+\renewcommand{\arraystretch}{1.35}
+
+% step counter
+\newcounter{step}
+\newcommand{\step}[1]{%
+  \stepcounter{step}%
+  \subsection*{\colorbox{navy}{\color{white}\;\textbf{Step \thestep}\;}\quad #1}%
+}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+% ── Title block ───────────────────────────────────────────────────────────────
+\begin{center}
+  {\fontsize{28}{34}\selectfont\bfseries\color{navy} AION}\\[4pt]
+  {\large\color{muted} Installation Guide}\\[6pt]
+  {\small\color{muted}
+    \href{https://github.com/draygen/aion}{github.com/draygen/aion}}
+\end{center}
+\vspace{4pt}
+\noindent\color{accent}\hrule height 2pt
+\vspace{14pt}
+
+% ── Prerequisites ─────────────────────────────────────────────────────────────
+\section{Prerequisites}
+
+Before you start, make sure the following are installed on your machine.
+
+\vspace{6pt}
+\begin{tabularx}{\linewidth}{M{3.2cm} M{2.8cm} X}
+  \toprule
+  \rowcolor{navy}
+  \color{white}\textbf{Requirement} & \color{white}\textbf{Min Version} & \color{white}\textbf{Install} \\
+  \midrule
+  \rowcolor{rowalt}
+  Python        & 3.10+  & \href{https://python.org}{python.org} \\
+  Git           & any    & \href{https://git-scm.com}{git-scm.com} \\
+  \rowcolor{rowalt}
+  Ollama        & latest & \href{https://ollama.com}{ollama.com} \\
+  \bottomrule
+\end{tabularx}
+
+\begin{infobox}
+  \textbf{Platform notes:}
+  These instructions work on \textbf{Linux}, \textbf{macOS}, and \textbf{Windows WSL2}.
+  Native Windows (CMD/PowerShell) is not supported — use WSL2.
+\end{infobox}
+
+% ── Steps ─────────────────────────────────────────────────────────────────────
+\section{Setup}
+
+% Step 1
+\step{Clone the repository}
+
+\begin{lstlisting}
+git clone https://github.com/draygen/aion.git
+cd aion
+\end{lstlisting}
+
+% Step 2
+\step{Create a Python virtual environment}
+
+\begin{lstlisting}
+python3 -m venv .venv
+source .venv/bin/activate
+\end{lstlisting}
+
+You should see \code{(.venv)} at the start of your terminal prompt.
+
+% Step 3
+\step{Install Python dependencies}
+
+\begin{lstlisting}
+pip install -r requirements.txt
+\end{lstlisting}
+
+This installs Flask, scikit-learn, bcrypt, gunicorn, and all other required packages.
+
+% Step 4
+\step{Create your local config file}
+
+Aion keeps secrets out of git using a \code{config\_local.py} file that you create yourself.
+Copy the template and fill in your values:
+
+\begin{lstlisting}
+cp config_local.py config_local.py.bak  # optional backup
+\end{lstlisting}
+
+Open \code{config\_local.py} in any editor and set:
+
+\begin{lstlisting}
+CONFIG_LOCAL = {
+    "elevenlabs_api_key": "",   # optional - for voice output
+    "vast_api_key":        "",   # optional - for cloud deployment
+    "admin_key":    "pick-a-secret",   # protects the /logs page
+    "admin_password": "pick-a-password",  # Brian's login password
+}
+\end{lstlisting}
+
+\begin{warnbox}
+  \textbf{Important:} \code{config\_local.py} is gitignored and will never be committed.
+  Do not put secrets in \code{config.py} — that file is public.
+\end{warnbox}
+
+% Step 5
+\step{Start Ollama and pull the LLM model}
+
+In a separate terminal (or run in the background):
+
+\begin{lstlisting}
+ollama serve
+\end{lstlisting}
+
+Then pull the model Aion uses (this downloads \textasciitilde4GB — one time only):
+
+\begin{lstlisting}
+ollama pull qwen2.5:7b
+\end{lstlisting}
+
+Wait until the pull completes before continuing.
+
+% Step 6
+\step{Create the data directory}
+
+The \code{data/} folder is gitignored so it won't exist after a fresh clone.
+Create it manually:
+
+\begin{lstlisting}
+mkdir -p data
+\end{lstlisting}
+
+Aion will auto-create \code{data/aion.db} (users, history) and
+\code{data/shared\_learned.jsonl} (learned facts) on first run.
+
+% Step 7
+\step{Start Aion}
+
+\textbf{Development mode} (auto-reloads on code changes):
+\begin{lstlisting}
+.venv/bin/python web.py
+\end{lstlisting}
+
+\textbf{Production mode} (stable, recommended):
+\begin{lstlisting}
+.venv/bin/gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 web:app
+\end{lstlisting}
+
+Open your browser and go to: \quad \href{http://localhost:5000}{\textbf{http://localhost:5000}}
+
+% Step 8
+\step{First login}
+
+On first run, Aion automatically creates the admin account:
+
+\vspace{6pt}
+\begin{tabularx}{0.5\linewidth}{M{2.8cm} X}
+  \toprule
+  \rowcolor{navy}\color{white}\textbf{Field} & \color{white}\textbf{Value} \\
+  \midrule
+  \rowcolor{rowalt} Username & \code{brian} \\
+  Password & whatever you set as \code{admin\_password} in Step 4 \\
+  \bottomrule
+\end{tabularx}
+
+\vspace{8pt}
+After logging in you will see the chat interface. Admin users also have access
+to the \textbf{Admin} panel in the top-right corner.
+
+% ── Adding more users ─────────────────────────────────────────────────────────
+\section{Adding More Users}
+
+Once logged in as admin, create additional users via the API:
+
+\begin{lstlisting}
+curl -X POST http://localhost:5000/api/admin/users \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"username": "gary", "password": "garyspassword", "role": "user"}'
+\end{lstlisting}
+
+Or use the \code{/admin} panel in the browser once the Vast.ai section is set up.
+
+% ── Optional: TTS ─────────────────────────────────────────────────────────────
+\section{Optional: Voice Output (ElevenLabs TTS)}
+
+Aion supports text-to-speech via ElevenLabs. To enable it:
+
+\begin{enumerate}[leftmargin=1.4em, itemsep=2pt]
+  \item Get an API key from \href{https://elevenlabs.io}{elevenlabs.io}
+  \item Add it to \code{config\_local.py}: \code{"elevenlabs\_api\_key": "your-key"}
+  \item The TTS ON/OFF toggle in the chat UI will now produce audio
+\end{enumerate}
+
+% ── Optional: Vast.ai ─────────────────────────────────────────────────────────
+\section{Optional: Cloud Deployment (Vast.ai)}
+
+To use the admin GPU deployment panel:
+
+\begin{enumerate}[leftmargin=1.4em, itemsep=2pt]
+  \item Create an account at \href{https://vast.ai}{vast.ai}
+  \item Copy your API key from \textbf{console.vast.ai} $\to$ Account $\to$ API Keys
+  \item Add it to \code{config\_local.py}: \code{"vast\_api\_key": "your-key"}
+  \item Go to \href{http://localhost:5000/admin}{\code{/admin}} $\to$ \textbf{Find GPU Servers}
+  \item Filter by price and VRAM, click \textbf{Deploy} on any row
+\end{enumerate}
+
+Aion will provision the instance, install Ollama, pull the model, clone the
+repo from GitHub, and start itself automatically within a few minutes.
+
+% ── Troubleshooting ───────────────────────────────────────────────────────────
+\section{Troubleshooting}
+
+\begin{tabularx}{\linewidth}{M{4.8cm} X}
+  \toprule
+  \rowcolor{navy}\color{white}\textbf{Problem} & \color{white}\textbf{Fix} \\
+  \midrule
+  \rowcolor{rowalt}
+  \textit{Ollama not running} &
+    Run \code{ollama serve} in a separate terminal. \\
+
+  \textit{Model not found} &
+    Run \code{ollama pull qwen2.5:7b} and wait for it to finish. \\
+
+  \rowcolor{rowalt}
+  \textit{Login fails on first run} &
+    Check \code{admin\_password} is set in \code{config\_local.py}. \\
+
+  \textit{Port 5000 already in use} &
+    Run \code{lsof -i :5000} to find the process and kill it,
+    or change the port in the \code{gunicorn} command. \\
+
+  \rowcolor{rowalt}
+  \textit{Script won't run on WSL} &
+    Run \code{sed -i 's/\textbackslash r//' script.sh} to fix Windows
+    line endings (CRLF). \\
+
+  \textit{\code{config\_local.py} not found} &
+    Create it manually — see Step 4. It is intentionally excluded from git. \\
+  \bottomrule
+\end{tabularx}
+
+% ── Footer ────────────────────────────────────────────────────────────────────
+\vspace{20pt}
+\noindent\color{rulecol}\hrule
+\vspace{8pt}
+{\small\color{muted}\textit{Aion by Brian Wallace \quad — \quad
+\href{https://github.com/draygen/aion}{github.com/draygen/aion}}}
+
+\end{document}

@@ -23,7 +23,7 @@ logging.basicConfig(
     level=logging.INFO,  # Default hides DEBUG
     format="%(levelname)s: %(message)s"
 )
-logger = logging.getLogger("jarvis")
+logger = logging.getLogger("aion")
 
 # Respect CONFIG["DEBUG"]
 if CONFIG.get("DEBUG"):
@@ -53,7 +53,7 @@ def speak(text):
         os.remove(audio_file)
         logger.debug("Audio playback attempted and file removed.")
     except Exception as e:
-        print(f"Jarvis (TTS error): Could not generate or play speech: {e}")
+        print(f"Aion (TTS error): Could not generate or play speech: {e}")
         import traceback
         traceback.print_exc()
 
@@ -66,7 +66,7 @@ def build_prompt(user_text: str) -> str:
     facts = get_facts(user_text, k=12)
     _last_snippets = facts or []
     ctx_header = (
-        "You are JARVIS, Brian's personal AI assistant. Address him as Brian (draygen).\n"
+        "You are AION, Brian's personal AI assistant. Address him as Brian (draygen).\n"
         "Style: informal, opinionated, extremely direct, sometimes sarcastic/humorous.\n"
         "Answer concisely (1-4 sentences).\n"
         "Use ONLY the context snippets if they are relevant. If the answer is not in context, say: I don't know.\n\n"
@@ -104,7 +104,7 @@ def handle_set(args: str) -> str:
 
 
 def main() -> int:
-    print("Jarvis is online. Type /help for commands. Type 'exit' to quit.")
+    print("Aion is online. Type /help for commands. Type 'exit' to quit.")
 
     # Ask about TTS at startup
     initial_tts_choice = input("Enable Text-to-Speech (y/n)? [y]: ").strip().lower()
@@ -127,7 +127,7 @@ def main() -> int:
         if cmd:
             name, args = cmd
             if name == "exit":
-                print("Jarvis: Goodbye.")
+                print("Aion: Goodbye.")
                 sys.exit(0)
             elif name == "help":
                 print(help_text())
@@ -234,11 +234,11 @@ def main() -> int:
         try:
             answer = ask_llm(prompt)
         except Exception as e:
-            print(f"Jarvis (error): An error occurred while communicating with the LLM: {e}")
+            print(f"Aion (error): An error occurred while communicating with the LLM: {e}")
             continue
 
         answer = answer.strip() or "(no response)"
-        print(f"Jarvis: {answer}")
+        print(f"Aion: {answer}")
         logger.debug("Answer from LLM: %s...", answer[:50])
 
         if CONFIG.get("TTS_ENABLED", True) and answer != "(no response)":

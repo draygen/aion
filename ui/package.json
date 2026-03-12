@@ -1,15 +1,15 @@
 {
-  "name": "jarvis",
+  "name": "aion",
   "version": "1.0.0",
-  "description": "JARVIS desktop client",
+  "description": "AION desktop client",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win --x64"
   },
   "build": {
-    "appId": "com.draygen.jarvis",
-    "productName": "Jarvis",
+    "appId": "com.draygen.aion",
+    "productName": "Aion",
     "directories": { "output": "dist" },
     "win": {
       "target": "nsis",

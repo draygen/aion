@@ -8,7 +8,7 @@ import time
 
 from config import CONFIG
 
-logger = logging.getLogger("jarvis.speech")
+logger = logging.getLogger("aion.speech")
 
 # Lazy load the model to avoid slow startup
 _model = None

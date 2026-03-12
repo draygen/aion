@@ -2,8 +2,8 @@ import os
 import json
 
 # --- CONFIG ---
-INBOX_DIR = r"C:\jarvis\messages\inbox"
-OUTPUT_FILE = r"C:\jarvis\data\fb_qa_pairs.jsonl"
+INBOX_DIR = r"C:\aion\messages\inbox"
+OUTPUT_FILE = r"C:\aion\data\fb_qa_pairs.jsonl"
 YOUR_NAME = "Brian Wallace"  # Make sure this matches exactly how you appear in messages!
 
 def scan_messages(folder):

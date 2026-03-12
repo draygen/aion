@@ -1,0 +1,23 @@
+2026-03-10T16:41:27Z INF Starting tunnel tunnelID=d08c0117-519b-423e-8318-8f9d1f23f80b
+2026-03-10T16:41:27Z INF Version 2026.2.0 (Checksum 176746db3be7dc7bd48f3dd287c8930a4645ebb6e6700f883fddda5a4c307c16)
+2026-03-10T16:41:27Z INF GOOS: linux, GOVersion: go1.24.13, GoArch: amd64
+2026-03-10T16:41:27Z INF Settings: map[config:/home/draygen/.cloudflared/config.yml cred-file:/mnt/c/projects/merge_syncforge/d08c0117-519b-423e-8318-8f9d1f23f80b.json credentials-file:/mnt/c/projects/merge_syncforge/d08c0117-519b-423e-8318-8f9d1f23f80b.json p:quic protocol:quic]
+2026-03-10T16:41:27Z INF cloudflared will not automatically update if installed by a package manager.
+2026-03-10T16:41:27Z INF Generated Connector ID: f8cec2d6-bd53-4fd6-8578-6744d23f4436
+2026-03-10T16:41:27Z INF Initial protocol quic
+2026-03-10T16:41:27Z INF ICMP proxy will use 172.21.133.116 as source for IPv4
+2026-03-10T16:41:27Z INF ICMP proxy will use fe80::215:5dff:fe34:ae0 in zone eth0 as source for IPv6
+2026-03-10T16:41:27Z WRN The user running cloudflared process has a GID (group ID) that is not within ping_group_range. You might need to add that user to a group within that range, or instead update the range to encompass a group the user is already in by modifying /proc/sys/net/ipv4/ping_group_range. Otherwise cloudflared will not be able to ping this network error="Group ID 1000 is not between ping group 1 to 0"
+2026-03-10T16:41:27Z WRN ICMP proxy feature is disabled error="cannot create ICMPv4 proxy: Group ID 1000 is not between ping group 1 to 0 nor ICMPv6 proxy: socket: permission denied"
+2026-03-10T16:41:27Z INF ICMP proxy will use 172.21.133.116 as source for IPv4
+2026-03-10T16:41:27Z INF ICMP proxy will use fe80::215:5dff:fe34:ae0 in zone eth0 as source for IPv6
+2026-03-10T16:41:27Z INF Starting metrics server on 127.0.0.1:20241/metrics
+2026-03-10T16:41:27Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=0 event=0 ip=198.41.200.73
+2026/03/10 12:41:27 failed to sufficiently increase receive buffer size (was: 208 kiB, wanted: 7168 kiB, got: 416 kiB). See https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes for details.
+2026-03-10T16:41:27Z INF Registered tunnel connection connIndex=0 connection=cdb29b3f-2ed0-41e1-ba59-28d406975ae2 event=0 ip=198.41.200.73 location=ewr12 protocol=quic
+2026-03-10T16:41:27Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=1 event=0 ip=198.41.192.107
+2026-03-10T16:41:28Z INF Registered tunnel connection connIndex=1 connection=2fd19122-d56d-4fc0-aef0-d4049bd35a63 event=0 ip=198.41.192.107 location=bos04 protocol=quic
+2026-03-10T16:41:28Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=2 event=0 ip=198.41.200.33
+2026-03-10T16:41:29Z INF Registered tunnel connection connIndex=2 connection=3ec77e09-c542-49e6-ae51-4fa354f705fb event=0 ip=198.41.200.33 location=ewr14 protocol=quic
+2026-03-10T16:41:29Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=3 event=0 ip=198.41.192.67
+2026-03-10T16:41:30Z INF Registered tunnel connection connIndex=3 connection=f31e55bb-b8ae-4e8f-bf97-b5950eb6dbc0 event=0 ip=198.41.192.67 location=bos03 protocol=quic

@@ -39,6 +39,8 @@ CONFIG = {
         "http://127.0.0.1",
         "http://localhost:5000",
         "http://127.0.0.1:5000",
+        "http://localhost:3001",   # PromptGen server (WSL → Windows via mirrored networking)
+        "http://localhost:5173",   # PromptGen client (Vite)
         "null",  # Electron/file:// clients
     ],
     "cookie_samesite": "Lax",

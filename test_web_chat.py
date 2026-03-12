@@ -17,11 +17,11 @@ class TestWebChatFlow(unittest.TestCase):
         self.original_db_path = auth.DB_PATH
         self.original_admin_password = CONFIG.get("admin_password")
         self.original_auto_extract = CONFIG.get("auto_extract_facts", True)
-        auth.DB_PATH = os.path.join(self.temp_dir.name, "jarvis-test.db")
+        auth.DB_PATH = os.path.join(self.temp_dir.name, "aion-test.db")
         CONFIG["admin_password"] = "changeme2026!"
         CONFIG["auto_extract_facts"] = False
         auth.init_db()
-        self.client.set_cookie("jarvis_token", "test-token")
+        self.client.set_cookie("aion_token", "test-token")
 
     def tearDown(self):
         auth.DB_PATH = self.original_db_path
