@@ -185,6 +185,73 @@
       border-radius: 0.5rem;
       cursor: pointer;
     }
+
+    #user-badge {
+      color: #00d9ff99;
+      font-size: 0.78rem;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #logout-btn {
+      display: none;
+      border-color: #ff6b6b55;
+      color: #ff6b6b;
+    }
+    #logout-btn:hover { background: #ff6b6b22; border-color: #ff6b6b; }
+
+    #login {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #1a1a2eee;
+      z-index: 150;
+      align-items: center;
+      justify-content: center;
+    }
+    #login.open { display: flex; }
+    .login-box {
+      width: 90%;
+      max-width: 360px;
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 1rem;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .login-box h2 { color: #00d9ff; font-size: 1rem; }
+    .login-box p { color: #9fb7d1; font-size: 0.85rem; }
+    .login-box input {
+      width: 100%;
+      padding: 0.65rem 0.8rem;
+      background: #1a1a2e;
+      border: 1px solid #0f3460;
+      border-radius: 0.5rem;
+      color: #eee;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .login-box input:focus { border-color: #00d9ff; }
+    #login-btn {
+      padding: 0.6rem 1rem;
+      background: #00d9ff;
+      color: #1a1a2e;
+      border: none;
+      border-radius: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #login-btn:disabled { background: #333; color: #555; cursor: not-allowed; }
+    #login-error {
+      color: #ff6b6b;
+      display: none;
+      font-size: 0.82rem;
+    }
   </style>
 </head>
 <body>
@@ -192,7 +259,9 @@
 <header>
   <h1><span id="status-dot"></span>AION</h1>
   <div class="header-btns">
+    <span id="user-badge"></span>
     <button class="hdr-btn" id="tts-btn">TTS ON</button>
+    <button class="hdr-btn" id="logout-btn">Logout</button>
     <button class="hdr-btn" id="settings-btn">⚙</button>
   </div>
 </header>
@@ -219,32 +288,122 @@
   </div>
 </div>
 
+<div id="login">
+  <div class="login-box">
+    <h2>Sign In</h2>
+    <p>Desktop chat now requires an authenticated Aion session.</p>
+    <input type="text" id="login-user" placeholder="Username" autocomplete="username">
+    <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password">
+    <button id="login-btn">Sign In</button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
 <script>
   let apiUrl = 'http://50.173.192.52:41658';
   let ttsEnabled = true;
+  let authed = false;
 
   const chat       = document.getElementById('chat');
   const msgInput   = document.getElementById('msg-input');
   const sendBtn    = document.getElementById('send-btn');
   const ttsBtn     = document.getElementById('tts-btn');
+  const logoutBtn  = document.getElementById('logout-btn');
   const settingsEl = document.getElementById('settings');
   const apiInput   = document.getElementById('api-url-input');
   const statusDot  = document.getElementById('status-dot');
+  const userBadge  = document.getElementById('user-badge');
+  const loginEl    = document.getElementById('login');
+  const loginUser  = document.getElementById('login-user');
+  const loginPass  = document.getElementById('login-pass');
+  const loginBtn   = document.getElementById('login-btn');
+  const loginError = document.getElementById('login-error');
 
   // Load config from electron main process
   async function init() {
     const config = await window.aion.getConfig();
     apiUrl = config.apiUrl || apiUrl;
     apiInput.value = apiUrl;
+    await checkAuth();
     checkStatus();
+    if (authed) msgInput.focus();
   }
 
   async function checkStatus() {
     try {
-      const r = await fetch(apiUrl + '/', { signal: AbortSignal.timeout(3000) });
+      const r = await fetch(apiUrl + '/api/system/public/health', { signal: AbortSignal.timeout(3000) });
       statusDot.className = r.ok ? 'online' : 'offline';
     } catch {
       statusDot.className = 'offline';
+    }
+  }
+
+  function setAuthState(username) {
+    authed = Boolean(username);
+    loginEl.classList.toggle('open', !authed);
+    logoutBtn.style.display = authed ? 'inline-block' : 'none';
+    userBadge.textContent = authed ? username : '';
+    msgInput.disabled = !authed;
+    sendBtn.disabled = !authed;
+  }
+
+  function showLoginError(message) {
+    loginError.textContent = message || '';
+    loginError.style.display = message ? 'block' : 'none';
+  }
+
+  async function checkAuth() {
+    try {
+      const res = await fetch(apiUrl + '/api/whoami', {
+        credentials: 'include',
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) {
+        setAuthState('');
+        return;
+      }
+      const data = await res.json();
+      setAuthState(data.username || 'user');
+      showLoginError('');
+    } catch {
+      setAuthState('');
+      showLoginError('Could not reach Aion API.');
+    }
+  }
+
+  async function doLogin() {
+    const username = loginUser.value.trim();
+    const password = loginPass.value;
+    if (!username || !password) {
+      showLoginError('Enter username and password.');
+      return;
+    }
+    loginBtn.disabled = true;
+    showLoginError('');
+    try {
+      const res = await fetch(apiUrl + '/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username, password }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showLoginError(data.error || 'Login failed.');
+        return;
+      }
+      if (data.requires_password_change) {
+        showLoginError('Password must be changed in web UI first.');
+        return;
+      }
+      setAuthState(data.username || username);
+      loginPass.value = '';
+      msgInput.focus();
+    } catch (err) {
+      showLoginError('Login error: ' + err.message);
+    } finally {
+      loginBtn.disabled = false;
     }
   }
 
@@ -284,13 +443,17 @@
       const res = await fetch(apiUrl + '/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ message: text, tts: ttsEnabled }),
         signal: AbortSignal.timeout(120000),
       });
       const data = await res.json();
       typing.remove();
 
-      if (data.error) {
+      if (res.status === 401 || (data && data.login_required)) {
+        setAuthState('');
+        showLoginError('Session expired. Sign in again.');
+      } else if (data.error) {
         addMsg('Error: ' + data.error, 'assistant error');
       } else {
         addMsg(data.response, 'assistant');
@@ -327,8 +490,20 @@
     apiUrl = apiInput.value.trim().replace(/\/$/, '');
     await window.aion.saveConfig({ apiUrl });
     settingsEl.classList.remove('open');
+    await checkAuth();
     checkStatus();
   });
+
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      await fetch(apiUrl + '/api/logout', { method: 'POST', credentials: 'include' });
+    } catch {}
+    setAuthState('');
+  });
+
+  loginBtn.addEventListener('click', doLogin);
+  loginPass.addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
+  loginUser.addEventListener('keypress', e => { if (e.key === 'Enter') loginPass.focus(); });
 
   // Send on Enter
   msgInput.addEventListener('keypress', e => { if (e.key === 'Enter') send(); });
@@ -336,7 +511,6 @@
 
   init();
   setInterval(checkStatus, 30000);
-  msgInput.focus();
 </script>
 </body>
 </html>
